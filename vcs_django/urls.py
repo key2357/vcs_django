@@ -19,13 +19,13 @@ from django.views.generic.base import TemplateView
 from backend import views
 
 urlpatterns = [
-    path('admin/', admin.site.urls),
+    path('admin', admin.site.urls),
     path('', TemplateView.as_view(template_name="index.html")),
-    path('test/', views.test),
-    path('getBaseInfo/', views.get_base_info),
-    path('getBaseInfoTimeSeries/', views.get_base_info_time_series),
-    path('getECSGroup/', views.get_ECS_group),
-    path('getECSGroupByTime/', views.get_ECS_group_by_time),
+    path('test', views.test),
+    path('getBaseInfo', views.get_base_info),
+    path('getBaseInfoTimeSeries', views.get_base_info_time_series),
+    path('getECSGroup', views.get_ECS_group),
+    path('getECSGroupByTime', views.get_ECS_group_by_time),
     # path('getAllESCByRegion/', views.get_all_ESC_by_Region),
     # path('getbadFileByEeleECS/', views.get_bad_file_by_ECS)
 ]

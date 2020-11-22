@@ -5,7 +5,6 @@ import time, datetime
 import json
 import math
 import networkx as nx
-import matplotlib.pyplot as plt
 from vcs_django.settings import BASE_DIR
 import random
 
