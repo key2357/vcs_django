@@ -27,6 +27,5 @@ urlpatterns = [
     path('getECSGroup/', views.get_ECS_group),
     path('getECSGroupByTime/', views.get_ECS_group_by_time),
     # path('getAllESCByRegion/', views.get_all_ESC_by_Region),
-    path('getbadFileByEeleECS/', views.get_bad_file_by_ECS)
-
+    # path('getbadFileByEeleECS/', views.get_bad_file_by_ECS)
 ]
