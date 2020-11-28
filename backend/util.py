@@ -1,6 +1,7 @@
 from backend.config import INIT_TIME, FINAL_TIME
 import datetime
 
+
 # 文件过滤
 def get_file_where_str(malware_type_list, malware_subtype_list, malware_filetype_list):
     where_str = ''
@@ -66,6 +67,11 @@ def get_time_str(begin_time_number, end_time_number):
 
 def get_time_where_str(begin_time_str, end_time_str):
     where_str = 'where first_time > \'' + begin_time_str + '\' and first_time < \'' + end_time_str + '\' '
+    return where_str
+
+
+def get_slice_where_str(begin_time_str, end_time_str):
+    where_str = 'where source_create_time > \'' + begin_time_str + '\' and source_create_time < \'' + end_time_str + '\' and target_create_time > \'' + begin_time_str + '\' and target_create_time < \'' +  end_time_str + '\' '
     return where_str
 
 # # list 转 csv

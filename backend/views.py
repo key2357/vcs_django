@@ -1,12 +1,12 @@
 from django.http import HttpResponse
 from django.db import connection
-from backend.util import get_file_where_str, get_file_and_time_where_str, get_time_str, get_time_where_str
+from backend.util import get_file_where_str, get_file_and_time_where_str, get_time_str, get_time_where_str, \
+    get_slice_where_str
 from vcs_django.settings import BASE_DIR
 from backend.config import MALWARE_SUBTYPE, FINAL_TIME, INIT_TIME
 import pandas as pd
 import numpy as np
 import time
-import datetime
 import random
 import json
 import math
@@ -14,45 +14,123 @@ import networkx as nx
 
 
 # import matplotlib.pyplot as plt
-
-
 def test(request):
+    # 处理全连接图为环形
+    # error_node = [123, 143, 149, 166, 187, 250, 284]  # 包含全连接和非全连接的
+    # error_node_all_connection = [105, 242]
     cursor = connection.cursor()
-    cursor.execute("select uuid from malware_base_info "
-                   "where first_time > '2017-11-29 00:00:00' and first_time < '2020-11-03 00:00:00' group by uuid")
-
+    cursor.execute("select `source`, target, similarity from similarity_info")
     desc = cursor.description
     all_data = cursor.fetchall()
-    engines_data = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+    row_data = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+    print(len(row_data))
+    count = 0
+    for r in row_data:
+        if r['similarity'] == 1:
+            count += 1
+    print(count)
 
-    # uuid_set = set()
-    # for en in engines_data:
-    #     uuid_set.add(en['uuid'])  # 3797  3797
-    print(len(engines_data))
-
+    # 再生成除环以外的边
+    # for le in data['links']:
+    #     # 判断两者不在一个集合内
+    #     source = le['source']
+    #     target = le['target']
     #
-    # print(len(uuid_set))
-    # begin_time_number = 0
-    # end_time_number = 1
-    # begin_time_stamp = begin_time_number * (FINAL_TIME - INIT_TIME) + INIT_TIME
-    # end_time_number = end_time_number * (FINAL_TIME - INIT_TIME) + INIT_TIME
-    # begin_time_array = datetime.datetime.fromtimestamp(begin_time_stamp)
-    # end_time_array = datetime.datetime.fromtimestamp(end_time_number)
-    # begin_time_str = str(begin_time_array.strftime("%Y-%m-%d %H:%M:%S"))
+    #     is_in_set = False
+    #     for s in set_list:
+    #         if source in s and target in s:
+    #             is_in_set = True
     #
-    # end_time_str = str(end_time_array.strftime("%Y-%m-%d %H:%M:%S"))
-    # print(begin_time_str , end_time_str)
+    #     if not is_in_set:
+    #         if (le['source'], le['target']) not in links_set:
+    #             links_after_handle.append({
+    #                 "source": le['source'],
+    #                 "target": le['target'],
+    #                 "value": le['value'],
+    #                 "isLoop": False
+    #             })
 
-    # begintime_str = '2017-11-29 00:00:00'
-    # endTime_str = '2020-11-03 00:00:00'
-    # begin_date = datetime.datetime.strptime(begintime_str, '%Y-%m-%d %H:%M:%S')
-    # end_date = datetime.datetime.strptime(endTime_str, '%Y-%m-%d %H:%M:%S')
-    # begin_timestamp = int(time.mktime(begin_date.timetuple()))
-    # end_timestamp = int(time.mktime(end_date.timetuple()))
-    # print(begin_timestamp, end_timestamp)
+    # data['links'] = links_after_handle
+    # c = 296
+    # json_data = json.dumps(data)
+    # file_object = open(str(BASE_DIR) + '//slice_' + str(c) + '.json', 'w')
+    # file_object.write(json_data)
+    # file_object.close()
 
-    Data = {}
-    return HttpResponse(json.dumps(Data), content_type='application/json')
+    # 测试有多少空数据
+    # df = pd.read_csv(str(BASE_DIR) + '//backend//data//file_md5.csv', usecols=[0])
+    # file_md5 = df.iloc[:, 0:1].values
+    # file_md5_info = []
+    # for i in range(len(file_md5)):
+    #     file_md5_info.append(file_md5[i][0])
+    #
+    # cursor = connection.cursor()
+    # cursor.execute("select malware_md5, create_time from malware_base_info group by malware_md5")
+    # desc = cursor.description
+    # all_data = cursor.fetchall()
+    # time_data = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+    #
+    # time_dict = {}
+    # x = 0
+    # for t in time_data:
+    #     if t['create_time']:
+    #         time_dict[t['malware_md5']] = t['create_time'].strftime('%Y-%m-%d %H:%M:%S')
+    #     elif t['malware_md5'] in time_dict and time_dict[t['malware_md5']] != 0 and t['create_time'] == 0:
+    #         x += 1
+    #     else:
+    #         time_dict[t['malware_md5']] = '0'
+    #
+    # file_time = []
+    # for f in file_md5_info:
+    #     if time_dict[f] != '0':
+    #         file_time.append(time_dict[f])
+    # print(len(file_time))
+    # print(x)
+    data = {}
+    return HttpResponse(json.dumps(data), content_type='application/json')
+    # 1373 9549
+
+
+# 生成tree
+# def test(request):
+#
+#
+#     # cursor = connection.cursor()
+#     # cursor.execute("select uuid from malware_base_info "
+#     #                "where first_time > '2017-11-29 00:00:00' and first_time < '2020-11-03 00:00:00' group by uuid")
+#     #
+#     # desc = cursor.description
+#     # all_data = cursor.fetchall()
+#     # engines_data = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+#     #
+#     # # uuid_set = set()
+#     # # for en in engines_data:
+#     # #     uuid_set.add(en['uuid'])  # 3797  3797
+#     # print(len(engines_data))
+#
+#     #
+#     # print(len(uuid_set))
+#     # begin_time_number = 0
+#     # end_time_number = 1
+#     # begin_time_stamp = begin_time_number * (FINAL_TIME - INIT_TIME) + INIT_TIME
+#     # end_time_number = end_time_number * (FINAL_TIME - INIT_TIME) + INIT_TIME
+#     # begin_time_array = datetime.datetime.fromtimestamp(begin_time_stamp)
+#     # end_time_array = datetime.datetime.fromtimestamp(end_time_number)
+#     # begin_time_str = str(begin_time_array.strftime("%Y-%m-%d %H:%M:%S"))
+#     #
+#     # end_time_str = str(end_time_array.strftime("%Y-%m-%d %H:%M:%S"))
+#     # print(begin_time_str , end_time_str)
+#
+#     # begintime_str = '2017-11-29 00:00:00'
+#     # endTime_str = '2020-11-03 00:00:00'
+#     # begin_date = datetime.datetime.strptime(begintime_str, '%Y-%m-%d %H:%M:%S')
+#     # end_date = datetime.datetime.strptime(endTime_str, '%Y-%m-%d %H:%M:%S')
+#     # begin_timestamp = int(time.mktime(begin_date.timetuple()))
+#     # end_timestamp = int(time.mktime(end_date.timetuple()))
+#     # print(begin_timestamp, end_timestamp)
+#
+#     Data = {}
+#     return HttpResponse(json.dumps(Data), content_type='application/json')
 
 
 # 这个可以改为静态的了
@@ -129,10 +207,15 @@ def get_force(request):
 
     cursor = connection.cursor()
     # 获取总态势值 耗时2.5s左右
-    cursor.execute("select concat(DATE_FORMAT(first_time, '%Y-%m-%d '),'00:00:00') as time,"
-                   "SUM(CASE level WHEN 'lower' Then 1 WHEN 'high' THEN 3 WHEN 'serious' THEN 4 ELSE 0 END) AS levelValue "
-                   "from malware_base_info " + where_str + " group by DATE_FORMAT(first_time, '%Y-%m-%d')")
+    # cursor.execute("select concat(DATE_FORMAT(first_time, '%Y-%m-%d '),'00:00:00') as time,"
+    #                "SUM(CASE level WHEN 'lower' Then 1 WHEN 'high' THEN 3 WHEN 'serious' THEN 4 ELSE 0 END) AS levelValue "
+    #                "from malware_base_info " + where_str + " group by DATE_FORMAT(first_time, '%Y-%m-%d')")
 
+    # 获取文件数量
+    cursor.execute("select concat(DATE_FORMAT(first_time, '%Y-%m-%d '),'00:00:00') as time, "
+                   "count(*) AS malwareNumber "
+                   "from (select first_time, malware_class, malware_type, file_type from malware_base_info "
+                   + where_str + " group by malware_md5) t group by DATE_FORMAT(first_time, '%Y-%m-%d')")
     desc = cursor.description
     all_data = cursor.fetchall()
     force_value = [dict(zip([col[0] for col in desc], row)) for row in all_data]
@@ -144,7 +227,7 @@ def get_force(request):
         if i['time'] != '0000-00-00 00:00:00':
             ReturnData.append({
                 'timestamp': i['time'],
-                'force_value': math.sqrt(int(i['levelValue']))
+                'fileNum': int(i['malwareNumber'])
             })
 
     return HttpResponse(json.dumps(ReturnData), content_type='application/json')
@@ -198,16 +281,35 @@ def get_ecs_force(request):
         end_time_number = slice['endTime']
         begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
         where_str = get_time_where_str(begin_time_str, end_time_str)
-        begin_time_number = 0
     else:
         begin_time_number = 0
         where_str = ''
     cursor = connection.cursor()
+    # cursor.execute(
+    #     "select uuid AS ESC_ID, AS_ID, VPC_ID, Region_ID, "
+    #     "malware_class as malwareType, malware_type as malwareSubtype, file_type as FileType, "
+    #     "count(malware_type) AS malwareNumber, "
+    #     # "SUM(CASE level WHEN 'lower' Then 1 WHEN 'high' THEN 3 WHEN 'serious' THEN 4 ELSE 0 END) AS levelValue,"
+    #     "sum(case when malware_type='WEBSHELL'then 1 else 0 end) as webshell, "
+    #     "sum(case when malware_type='DDOS木马' then 1 else 0 end) as DDOS木马,"
+    #     "sum(case when malware_type='被污染的基础软件' then 1 else 0 end) as 被污染的基础软件,"
+    #     "sum(case when malware_type='恶意程序' then 1 else 0 end) as 恶意程序,"
+    #     "sum(case when malware_type='恶意脚本文件' then 1 else 0 end) as 恶意脚本文件,"
+    #     "sum(case when malware_type='感染型病毒' then 1 else 0 end) as 感染型病毒,"
+    #     "sum(case when malware_type='黑客工具' then 1 else 0 end) as 黑客工具,"
+    #     "sum(case when malware_type='后门程序' then 1 else 0 end) as 后门程序,"
+    #     "sum(case when malware_type='勒索病毒' then 1 else 0 end) as 勒索病毒,"
+    #     "sum(case when malware_type='漏洞利用程序' then 1 else 0 end) as 漏洞利用程序,"
+    #     "sum(case when malware_type='木马程序' then 1 else 0 end) as 木马程序,"
+    #     "sum(case when malware_type='蠕虫病毒' then 1 else 0 end) as 蠕虫病毒,"
+    #     "sum(case when malware_type='挖矿程序' then 1 else 0 end) as 挖矿程序,"
+    #     "sum(case when malware_type='自变异木马' then 1 else 0 end) as 自变异木马 "
+    #     "from malware_base_info AS a LEFT JOIN user_netstate_info AS b ON a.uuid=b.ECS_ID " + where_str + " group by uuid")
+
     cursor.execute(
         "select uuid AS ESC_ID, AS_ID, VPC_ID, Region_ID, "
         "malware_class as malwareType, malware_type as malwareSubtype, file_type as FileType, "
         "count(malware_type) AS malwareNumber, "
-        "SUM(CASE level WHEN 'lower' Then 1 WHEN 'high' THEN 3 WHEN 'serious' THEN 4 ELSE 0 END) AS levelValue,"
         "sum(case when malware_type='WEBSHELL'then 1 else 0 end) as webshell, "
         "sum(case when malware_type='DDOS木马' then 1 else 0 end) as DDOS木马,"
         "sum(case when malware_type='被污染的基础软件' then 1 else 0 end) as 被污染的基础软件,"
@@ -222,54 +324,16 @@ def get_ecs_force(request):
         "sum(case when malware_type='蠕虫病毒' then 1 else 0 end) as 蠕虫病毒,"
         "sum(case when malware_type='挖矿程序' then 1 else 0 end) as 挖矿程序,"
         "sum(case when malware_type='自变异木马' then 1 else 0 end) as 自变异木马 "
-        "from malware_base_info AS a LEFT JOIN user_netstate_info AS b ON a.uuid=b.ECS_ID " + where_str + " group by uuid")
+        "from (select uuid, malware_class, malware_type, file_type from malware_base_info " + where_str + " group by malware_md5) AS a "
+                                                                                                          "LEFT JOIN user_netstate_info AS b ON a.uuid=b.ECS_ID group by uuid")
+
     desc = cursor.description
     all_data = cursor.fetchall()
     ecs_force_and_file = [dict(zip([col[0] for col in desc], row)) for row in all_data]
 
-    print(len(ecs_force_and_file))
     if not ecs_force_and_file:
         ReturnData = {}
         return HttpResponse(json.dumps(ReturnData), content_type='application/json')
-
-    # 态势值对应的 danger | warn | safe | none
-    # 先求得态势值10% 60%的值
-    level_value = []  # 保存态势值的数值
-    total_value = 0
-    for d in ecs_force_and_file:
-        level_value.append(int(d['levelValue']))
-        total_value += int(d['levelValue'])
-    level_value_sort = level_value
-    level_value_sort = sorted(level_value_sort)
-    point90 = level_value_sort[math.floor(len(level_value_sort) / 10 * 9)]
-    point40 = level_value_sort[math.floor(len(level_value_sort) / 10 * 4)]
-    point97 = level_value_sort[math.floor(len(level_value_sort) / 10 * 9.7)]
-    level_value_info = []  # 保存态势值的颜色
-    is_extremely_dangerous = []  # 保存ecs是否高危
-    for le in level_value:
-        if le == 0:
-            level_value_info.append('none')
-        elif le < point40:
-            level_value_info.append('safe')
-        elif point40 <= le < point90:
-            level_value_info.append('warn')
-        else:
-            level_value_info.append('danger')
-        if le > point97:
-            is_extremely_dangerous.append(True)
-        else:
-            is_extremely_dangerous.append(False)
-
-    # 处理一下阈值 9 和 64  小于9不显示圆形 大于64显示file_info
-    radius = []
-    for d in ecs_force_and_file:
-        malware_number = d['malwareNumber']
-        if malware_number < 9:
-            radius.append(0)
-        elif 9 <= malware_number <= 64:
-            radius.append((math.sqrt(malware_number) - 3) / 5 * 10)
-        else:
-            radius.append(-1)
 
     # webshell, DDOS木马,被污染的基础软件,恶意程序,恶意脚本文件,感染型病毒,黑客工具,后门程序,勒索病毒,漏洞利用程序,木马程序,蠕虫病毒,挖矿程序,自变异木马
     # 处理文件信息
@@ -300,6 +364,46 @@ def get_ecs_force(request):
                 }
             )
 
+    # 态势值对应的 danger | warn | safe | none 全改为文件数量
+    # 先求得态势值10% 60%的值
+    file_num = []  # 保存态势值的数值
+    total_value = 0
+    for d in ecs_force_and_file:
+        file_num.append(int(d['malwareNumber']))
+        total_value += int(d['malwareNumber'])
+    level_value_sort = file_num
+    level_value_sort = sorted(level_value_sort)
+    point90 = level_value_sort[math.floor(len(level_value_sort) / 10 * 9)]
+    point40 = level_value_sort[math.floor(len(level_value_sort) / 10 * 4)]
+    point97 = level_value_sort[math.floor(len(level_value_sort) / 10 * 9.7)]
+    level_value_info = []  # 保存态势值的颜色
+    is_extremely_dangerous = []  # 保存ecs是否高危
+    for le in file_num:
+        if le == 0:
+            level_value_info.append('none')
+        elif le < point40:
+            level_value_info.append('safe')
+        elif point40 <= le < point90:
+            level_value_info.append('warn')
+        else:
+            level_value_info.append('danger')
+        if le > point97:
+            is_extremely_dangerous.append(True)
+        else:
+            is_extremely_dangerous.append(False)
+
+    print(level_value_sort)
+    # 处理一下阈值 9 和 64  小于9不显示圆形 大于64显示file_info
+    radius = []
+    for d in ecs_force_and_file:
+        malware_number = d['malwareNumber']
+        if malware_number < 9:
+            radius.append(0)
+        elif 9 <= malware_number <= 64:
+            radius.append((math.sqrt(malware_number) - 3) / 5 * 10)
+        else:
+            radius.append(-1)
+
     # 计算是否高亮
     is_highlight = []
     if file:
@@ -322,7 +426,7 @@ def get_ecs_force(request):
             'type': level_value_info[i],
             'radius': radius[i],
             'fileInfo': file_info_result[i],
-            'forceValue': math.sqrt(level_value[i]),
+            # 'forceValue': math.sqrt(level_value[i]),
             'isExtremelyDangerous': is_extremely_dangerous[i],
             'isHighLight': is_highlight[i],
         })
@@ -410,68 +514,195 @@ def get_ecs_force(request):
     return HttpResponse(json.dumps(ReturnData), content_type='application/json')
 
 
-# 这个暂时没改
+# 用真数据
 def get_force_graph_by_time(request):
-    params = json.loads(request.body)
-    # malware_type_list = params['malwareType']
-    # malware_subtype_list = params['malwareSubtype']
-    begintime_str = params['beginTime']
-    endTime_str = params['endTime']
-    begin_date = datetime.datetime.strptime(begintime_str, '%Y-%m-%d %H:%M:%S')
-    end_date = datetime.datetime.strptime(endTime_str, '%Y-%m-%d %H:%M:%S')
-    begin_timestamp = int(time.mktime(begin_date.timetuple()))
-    end_timestamp = int(time.mktime(end_date.timetuple()))
+    # params = json.loads(request.body)
+    # slice = params['slice']
+    # file_filter = params['fileFilter']
 
-    # begintime_str = "2017-12-14 00:00:00"
-    # endTime_str = "2017-12-15 00:00:00"
-    # begin_date = datetime.datetime.strptime(begintime_str, '%Y-%m-%d %H:%M:%S')
-    # end_date = datetime.datetime.strptime(endTime_str, '%Y-%m-%d %H:%M:%S')
-    # begin_timestamp = int(time.mktime(begin_date.timetuple()))
-    # end_timestamp = int(time.mktime(end_date.timetuple()))
-
-    # # # 文件过滤
-    # malware_type_list = ['网站后门', '恶意进程', '恶意脚本']  #
-    # malware_subtype_list = ['WEBSHELL', '恶意脚本文件']
-    # malware_type_list = tuple(malware_type_list)
-    # 这里按malware_md5聚合
-    cursor = connection.cursor()
-    cursor.execute("select malware_md5, uuid AS ESC_ID, AS_ID, VPC_ID, Region_ID, malware_type "
-                   "from malware_base_info AS a LEFT JOIN user_netstate_info AS b ON a.uuid=b.ECS_ID "
-                   "where UNIX_TIMESTAMP(first_time) > '{0}' AND UNIX_TIMESTAMP(first_time) < '{1}' group by malware_md5".format(
-        begin_timestamp, end_timestamp))
-
-    desc = cursor.description
-    alldata = cursor.fetchall()
-    data = [dict(zip([col[0] for col in desc], row)) for row in alldata]
-
-    nodes = []
-    for d in data:
-        nodes.append({
-            'id': d['malware_md5'],
-            'file_type': d['malware_type'],
-            'ecsId': d['ESC_ID'],
-            'asId': d['AS_ID'],
-            'vpcId': d['VPC_ID'],
-            'regionId': d['Region_ID']
-        })
-
-    edge_list = []
-    # 随机生成200000条边
-    edge_list_set = set()  # 不重复
-    count_edge = 0
-    if len(data) > 1:
-        while count_edge < len(data) / 2:
-            x = random.randint(0, len(data) - 1)
-            y = random.randint(0, len(data) - 1)
-            edge_list_set.add((data[x]['malware_md5'], data[y]['malware_md5']))
-            count_edge += 1
-
-    for edge in edge_list_set:
-        edge_list.append({'source': edge[0], 'target': edge[1]})
-
-    Data = {
-        'nodes': nodes,
-        'links': edge_list
+    slice = {
+        'beginTime': 0.87,
+        'endTime': 0.88
     }
 
+    file_filter = {
+        'malwareType': ['网站后门', '恶意进程'],
+        'malwareSubtype': ['WEBSHELL', '挖矿程序'],
+        'fileType': ['BIN', 'WEBSHELL']
+    }
+
+    # 时间片为空的逻辑，以确定where_str
+    if slice:
+        begin_time_number = slice['beginTime']
+        end_time_number = slice['endTime']
+        begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
+        where_str = get_slice_where_str(begin_time_str, end_time_str)
+    else:
+        begin_time_number = 0
+        where_str = ''
+
+    # region_list = ['cn-region-0', 'cn-region-1', 'cn-region-2', 'cn-region-3']
+
+    cursor = connection.cursor()
+    cursor.execute("select `source`, target, similarity from similarity_info " + where_str)
+    desc = cursor.description
+    all_data = cursor.fetchall()
+    row_data = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+
+    # 读取file_detail_info
+    with open(str(BASE_DIR) + '//backend//data//file_detail_info.json', 'r', encoding='utf8')as fp:
+        file_detail_info = json.load(fp)
+
+    row_nodes = []
+    row_links = []
+    row_nodes_set = set()
+    row_links_set = set()
+    for r in row_data:
+        source = r['source']
+        target = r['target']
+        print(file_detail_info[source])
+        # 文件过滤
+        if file_detail_info:
+            if (file_detail_info[source]['malware_class'] in file_filter['malwareSubtype'] or file_detail_info[source][
+                'malware_type'] in file_filter['malwareSubtype'] or file_detail_info[source]['file_type'] in \
+                file_filter['fileType']) and (file_detail_info[target]['malware_class'] in file_filter[
+                'malwareSubtype'] or file_detail_info[target]['malware_type'] in file_filter['malwareSubtype'] or \
+                                              file_detail_info[target]['file_type'] in file_filter['fileType']):
+                if source not in row_nodes_set:
+                    row_nodes.append({
+                        "id": source,
+                        "file_type": file_detail_info[source]['malware_type'],
+                        "ecsId": file_detail_info[source]['ESC_ID'],
+                        "asId": file_detail_info[source]['AS_ID'],
+                        "vpcId": file_detail_info[source]['VPC_ID'],
+                        "regionId": file_detail_info[source]['Region_ID'],
+                        "createTIme": file_detail_info[source]['create_time']
+                    })
+                    row_nodes_set.add(source)
+
+                if target not in row_nodes_set:
+                    row_nodes.append({
+                        "id": target,
+                        "file_type": file_detail_info[target]['malware_type'],
+                        "ecsId": file_detail_info[target]['ESC_ID'],
+                        "asId": file_detail_info[target]['AS_ID'],
+                        "vpcId": file_detail_info[target]['VPC_ID'],
+                        "regionId": file_detail_info[target]['Region_ID'],
+                        "createTIme": file_detail_info[target]['create_time']
+                    })
+                    row_nodes_set.add(target)
+                if (source, target) not in row_links_set:
+                    row_links.append({
+                        "source": source,
+                        "target": target,
+                        "similarity": r['similarity'],
+                        "isLoop": True
+                    })
+        else:
+            if source not in row_nodes_set:
+                row_nodes.append({
+                    "id": source,
+                    "file_type": file_detail_info[source]['malware_type'],
+                    "ecsId": file_detail_info[source]['ESC_ID'],
+                    "asId": file_detail_info[source]['AS_ID'],
+                    "vpcId": file_detail_info[source]['VPC_ID'],
+                    "regionId": file_detail_info[source]['Region_ID'],
+                    "createTIme": file_detail_info[source]['create_time']
+                })
+                row_nodes_set.add(source)
+
+            if target not in row_nodes_set:
+                row_nodes.append({
+                    "id": target,
+                    "file_type": file_detail_info[target]['malware_type'],
+                    "ecsId": file_detail_info[target]['ESC_ID'],
+                    "asId": file_detail_info[target]['AS_ID'],
+                    "vpcId": file_detail_info[target]['VPC_ID'],
+                    "regionId": file_detail_info[target]['Region_ID'],
+                    "createTIme": file_detail_info[target]['create_time']
+                })
+                row_nodes_set.add(target)
+            if (source, target) not in row_links_set:
+                row_links.append({
+                    "source": source,
+                    "target": target,
+                    "similarity": r['similarity'],
+                    "isLoop": True
+                })
+
+    data = {
+        "nodes": row_nodes,
+        "links": row_links
+    }
+
+    # 按相似度=1的聚类，放在一个集合中
+    set_list = []
+    for ln in data['links']:
+        if float(ln['similarity']) == 1:
+            is_in = False
+            for s in set_list:
+                if ln['source'] in s:
+                    s.add(ln['target'])
+                    is_in = True
+                    break
+                if ln['target'] in s:
+                    s.add(ln['source'])
+                    is_in = True
+                    break
+
+            if not is_in:
+                set_list.append(set())
+                set_list[len(set_list) - 1].add(ln['source'])
+                set_list[len(set_list) - 1].add(ln['target'])
+
+    set_list_after_handle = []
+    for s in set_list:
+        set_list_after_handle.append(list(s))
+    print(len(set_list_after_handle))
+    links_after_handle = []
+    links_set = set()
+
+    # 对每个集合生成一个环
+    for s in set_list_after_handle:
+        for i in range(len(s) - 1):
+            links_after_handle.append({
+                "source": s[i],
+                "target": s[i + 1],
+                "similarity": 1.0,
+                "isLoop": True
+            })
+            links_set.add((s[i], s[i + 1]))
+            links_set.add((s[i + 1], s[i]))
+
+        links_after_handle.append({
+            "source": s[0],
+            "target": s[len(s) - 1],
+            "similarity": 1.0,
+            "isLoop": True
+        })
+        links_set.add((s[0], s[len(s) - 1]))
+        links_set.add((s[len(s) - 1], s[0]))
+
+    # 再生成除环以外的边
+    for le in data['links']:
+        # 判断两者不在一个集合内
+        source = le['source']
+        target = le['target']
+
+        is_in_set = False
+        for s in set_list:
+            if source in s and target in s:
+                is_in_set = True
+
+        if not is_in_set:
+            if (le['source'], le['target']) not in links_set:
+                links_after_handle.append({
+                    "source": le['source'],
+                    "target": le['target'],
+                    "similarity": float(le['similarity']),
+                    "isLoop": False
+                })
+
+    data['links'] = links_after_handle
+    Data = data
     return HttpResponse(json.dumps(Data), content_type='application/json')
