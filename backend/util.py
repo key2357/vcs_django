@@ -80,12 +80,20 @@ def get_timestamp(begin_time_number, end_time_number):
     end_timestamp = end_time_number * (FINAL_TIME - INIT_TIME) + INIT_TIME
     return begin_timestamp, end_timestamp
 
+
 def has_filter_func(file_filter):
     if file_filter['malwareType'] or file_filter['malwareSubtype'] or file_filter['fileType']:
         has_filter = True
     else:
         has_filter = False
     return has_filter
+
+
+# def change_file(file):
+#     if file['categories'] == '' and file['subtype'] == '':
+#         return  file
+#     else:
+#         if file['categories'] ==
 
 
 # # list 转 csv

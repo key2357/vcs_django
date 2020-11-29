@@ -15,20 +15,24 @@ import networkx as nx
 
 # import matplotlib.pyplot as plt
 def test(request):
-    # 处理全连接图为环形
-    # error_node = [123, 143, 149, 166, 187, 250, 284]  # 包含全连接和非全连接的
-    # error_node_all_connection = [105, 242]
     cursor = connection.cursor()
-    cursor.execute("select `source`, target, similarity from similarity_info")
+    cursor.execute("select count(similarity) from similarity_info where similarity = 1")
     desc = cursor.description
     all_data = cursor.fetchall()
     row_data = [dict(zip([col[0] for col in desc], row)) for row in all_data]
-    print(len(row_data))
-    count = 0
-    for r in row_data:
-        if r['similarity'] == 1:
-            count += 1
-    print(count)
+    print(row_data)
+    # 处理全连接图为环形
+    # error_node = [123, 143, 149, 166, 187, 250, 284]  # 包含全连接和非全连接的
+    # error_node_all_connection = [105, 242]
+    # cursor = connection.cursor()
+    # cursor.execute("select `source`, target, similarity from similarity_info")
+    # desc = cursor.description
+    # all_data = cursor.fetchall()
+    # row_data = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+    # count = 0
+    # for r in row_data:
+    #     if r['similarity'] == 1:
+    #         count += 1
 
     # 再生成除环以外的边
     # for le in data['links']:
@@ -203,7 +207,7 @@ def get_ecs_force(request):
 
     # slice = {
     #     'beginTime': 0.2,
-    #     'endTime': 0.21
+    #     'endTime': 0.25
     # }
     #
     # file_filter = {
@@ -213,9 +217,12 @@ def get_ecs_force(request):
     # }
     #
     # file = {
-    #     'categories': 'malwareType',
-    #     'subtype': '被污染的基础软件'
+    #     'categories': 'malwareSubtype',
+    #     'subtype': 'WEBSHELL'
     # }
+
+    # change file
+    # file = change_file(file)
 
     has_filter = has_filter_func(file_filter)
 
@@ -233,7 +240,6 @@ def get_ecs_force(request):
         malware_type_list = file_filter['malwareType']
         malware_subtype_list = file_filter['malwareSubtype']
         malware_filetype_list = file_filter['fileType']
-        # where_str = get_file_where_str(malware_type_list, malware_subtype_list, malware_filetype_list)
         begin_time_number = 0
         end_time_number = 1
         begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
@@ -251,9 +257,8 @@ def get_ecs_force(request):
 
     cursor.execute(
         "select uuid AS ESC_ID, AS_ID, VPC_ID, Region_ID, "
-        "malware_class as malwareType, malware_type as malwareSubtype, file_type as FileType, "
         "count(malware_type) AS malwareNumber, "
-        "sum(case when malware_type='WEBSHELL'then 1 else 0 end) as webshell, "
+        "sum(case when malware_type='WEBSHELL'then 1 else 0 end) as WEBSHELL, "
         "sum(case when malware_type='DDOS木马' then 1 else 0 end) as DDOS木马,"
         "sum(case when malware_type='被污染的基础软件' then 1 else 0 end) as 被污染的基础软件,"
         "sum(case when malware_type='恶意程序' then 1 else 0 end) as 恶意程序,"
@@ -266,9 +271,11 @@ def get_ecs_force(request):
         "sum(case when malware_type='木马程序' then 1 else 0 end) as 木马程序,"
         "sum(case when malware_type='蠕虫病毒' then 1 else 0 end) as 蠕虫病毒,"
         "sum(case when malware_type='挖矿程序' then 1 else 0 end) as 挖矿程序,"
-        "sum(case when malware_type='自变异木马' then 1 else 0 end) as 自变异木马 "
-        "from (select uuid, malware_class, malware_type, file_type from malware_base_info " + where_str + " group by malware_md5) AS a "
-        "LEFT JOIN user_netstate_info AS b ON a.uuid=b.ECS_ID group by uuid")
+        "sum(case when malware_type='自变异木马' then 1 else 0 end) as 自变异木马, "
+        "sum(case when malware_class='网站后门' then 1 else 0 end) as 网站后门, "
+        "sum(case when malware_class='恶意进程' then 1 else 0 end) as 恶意进程, "
+        "sum(case when malware_class='恶意脚本' then 1 else 0 end) as 恶意脚本 "
+        "from malware_base_info AS a LEFT JOIN user_netstate_info AS b ON a.uuid=b.ECS_ID " + where_str + " group by uuid")
 
     desc = cursor.description
     all_data = cursor.fetchall()
@@ -348,14 +355,26 @@ def get_ecs_force(request):
 
     # 计算是否高亮
     is_highlight = []
-    if file:
+    if file['categories'] != '' and file['subtype'] != '':
         categories = file['categories']
         subtype = file['subtype']
         for d in ecs_force_and_file:
-            if d[categories] == subtype:
-                is_highlight.append(True)
+            if categories == 'FileType':
+                if subtype == 'Webshell':
+                    subtype = 'WEBSHELL'
+                elif subtype == '二进制':
+                    subtype = '恶意进程'
+                else:
+                    subtype = '恶意脚本'
+                if d[subtype] > 0:
+                    is_highlight.append(True)
+                else:
+                    is_highlight.append(False)
             else:
-                is_highlight.append(False)
+                if d[subtype] > 0:
+                    is_highlight.append(True)
+                else:
+                    is_highlight.append(False)
     else:
         for i in range(len(ecs_force_and_file)):
             is_highlight.append(False)
@@ -468,9 +487,9 @@ def get_force_graph_by_time(request):
     # }
     #
     # file_filter = {
-    #     'malwareType': ['网站后门', '恶意进程'],
-    #     'malwareSubtype': ['WEBSHELL', '挖矿程序'],
-    #     'fileType': ['BIN', 'WEBSHELL']
+    #     'malwareType': [],
+    #     'malwareSubtype': [],
+    #     'fileType': []
     # }
 
     # 时间片为空的逻辑，以确定where_str
@@ -483,15 +502,12 @@ def get_force_graph_by_time(request):
         begin_time_number = 0
         where_str = ''
 
-    t1 = time.time()
     cursor = connection.cursor()
     cursor.execute("select `source`, target, similarity from similarity_info " + where_str)
     desc = cursor.description
     all_data = cursor.fetchall()
     row_data = [dict(zip([col[0] for col in desc], row)) for row in all_data]
 
-
-    t2 = time.time()
     # 读取file_detail_info
     with open(str(BASE_DIR) + '//backend//data//file_detail_info.json', 'r', encoding='utf8')as fp:
         file_detail_info = json.load(fp)
@@ -563,7 +579,6 @@ def get_force_graph_by_time(request):
                 })
                 row_nodes_set.add(target)
 
-    t25 = time.time()
     # 边数设置为1000？
     edge_number = len(row_data)
     if edge_number > 1000:
@@ -675,13 +690,5 @@ def get_force_graph_by_time(request):
                     })
         data['links'] = links_after_handle
 
-    t3 = time.time()
     ReturnData = data
-    # print(t1 - t0)
-    # print(t2 - t1)
-    # print(t25 - t2)
-    # print(t3 - t2)
-    # print(t4 - t3)
-    # print(t5 - t4)
-    # print(len(data['links']))
     return HttpResponse(json.dumps(ReturnData), content_type='application/json')
