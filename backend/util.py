@@ -39,7 +39,7 @@ def get_file_and_time_where_str(malware_type_list, malware_subtype_list, malware
     malware_subtype_str = '\',\''.join(malware_subtype_list)
     malware_filetype_str = '\',\''.join(malware_filetype_list)
 
-    where_str = 'where first_time > \'' + begin_time_str + '\' and first_time < \'' + end_time_str + '\' '
+    where_str = 'where create_time > \'' + begin_time_str + '\' and create_time < \'' + end_time_str + '\' '
 
     if malware_type_str != '':
         where_str += 'and malware_class in (\'' + malware_type_str + '\') '
@@ -66,13 +66,27 @@ def get_time_str(begin_time_number, end_time_number):
 
 
 def get_time_where_str(begin_time_str, end_time_str):
-    where_str = 'where first_time > \'' + begin_time_str + '\' and first_time < \'' + end_time_str + '\' '
+    where_str = 'where create_time > \'' + begin_time_str + '\' and create_time < \'' + end_time_str + '\' '
     return where_str
 
 
 def get_slice_where_str(begin_time_str, end_time_str):
-    where_str = 'where source_create_time > \'' + begin_time_str + '\' and source_create_time < \'' + end_time_str + '\' and target_create_time > \'' + begin_time_str + '\' and target_create_time < \'' +  end_time_str + '\' '
+    where_str = 'where source_create_time > \'' + str(begin_time_str) + '\' and source_create_time < \'' + str(end_time_str) + '\' and target_create_time > \'' + str(begin_time_str) + '\' and target_create_time < \'' + str(end_time_str) + '\' '
     return where_str
+
+
+def get_timestamp(begin_time_number, end_time_number):
+    begin_timestamp = begin_time_number * (FINAL_TIME - INIT_TIME) + INIT_TIME
+    end_timestamp = end_time_number * (FINAL_TIME - INIT_TIME) + INIT_TIME
+    return begin_timestamp, end_timestamp
+
+def has_filter_func(file_filter):
+    if file_filter['malwareType'] or file_filter['malwareSubtype'] or file_filter['fileType']:
+        has_filter = True
+    else:
+        has_filter = False
+    return has_filter
+
 
 # # list 转 csv
 # def to_csv():
