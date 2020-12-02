@@ -831,20 +831,20 @@ def get_ecs_force(request):
 
 # 用真数据
 def get_force_graph_by_time(request):
-    # params = json.loads(request.body)
-    # slice = params['slice']
-    # file_filter = params['fileFilter']
+    params = json.loads(request.body)
+    slice = params['slice']
+    file_filter = params['fileFilter']
 
-    slice = {
-        'beginTime': 0,
-        'endTime': 1
-    }
-
-    file_filter = {
-        'malwareType': [],
-        'malwareSubtype': [],
-        'fileType': []
-    }
+    # slice = {
+    #     'beginTime': 0,
+    #     'endTime': 1
+    # }
+    #
+    # file_filter = {
+    #     'malwareType': [],
+    #     'malwareSubtype': [],
+    #     'fileType': []
+    # }
 
     # 时间片为空的逻辑，以确定where_str
     if slice:
