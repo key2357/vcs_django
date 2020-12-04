@@ -417,32 +417,26 @@ def get_force(request):
 
 # view3 态势等级视图 获取每个ECS的信息（包括ECS_ID、态势等级、聚类结果、半径、态势值、是否高危、是否高亮、文件信息）
 def get_ecs_force(request):
-    # params = json.loads(request.body)
-    # slice = params['slice']
-    # file_filter = params['fileFilter']
-    # file = params['file']
+    params = json.loads(request.body)
+    slice = params['slice']
+    file_filter = params['fileFilter']
+    file = params['file']
 
-    slice = {
-        'beginTime': 0.5,
-        'endTime': 0.6
-    }
-
-    file_filter = {
-        'malwareType': [],
-        'malwareSubtype': [],
-        'fileType': []
-    }
-
+    # slice = {
+    #     'beginTime': 0.5,
+    #     'endTime': 0.6
+    # }
+    #
     # file_filter = {
     #     'malwareType': ['网站后门', '恶意进程'],
     #     'malwareSubtype': ['WEBSHELL', '挖矿程序'],
     #     'fileType': ['BIN', 'WEBSHELL']
     # }
-
-    file = {
-        'categories': 'malwareSubtype',
-        'subtype': 'WEBSHELL'
-    }
+    #
+    # file = {
+    #     'categories': 'malwareSubtype',
+    #     'subtype': 'WEBSHELL'
+    # }
 
     # change file
     # file = change_file(file)
