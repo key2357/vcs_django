@@ -154,11 +154,14 @@ def get_ecs_force(request):
     slice = params['slice']
     file_filter = params['fileFilter']
     file = params['file']
+    score_argv = params['score']
 
-    # alpha = 0.5
-    # beta = 0.5
-    # theta = 0.5
-    # gamma = 0.5
+    # score_argv = {
+    #     'alpha': 0.5,
+    #     'beta': 0.5,
+    #     'theta': 0.5,
+    #     'gamma': 0.5
+    # }
     #
     # slice = {
     #     'beginTime': 0.58,
@@ -176,8 +179,10 @@ def get_ecs_force(request):
     #     'subtype': 'WEBSHELL'
     # }
 
-    # change file
-    # file = change_file(file)
+    alpha = score_argv['alpha']
+    beta = score_argv['beta']
+    theta = score_argv['theta']
+    gamma = score_argv['gamma']
 
     has_filter = has_filter_func(file_filter)
 
@@ -210,6 +215,7 @@ def get_ecs_force(request):
         where_str = ''
     cursor = connection.cursor()
 
+    print(where_str)
     cursor.execute(
         "select uuid AS ESC_ID, AS_ID, VPC_ID, Region_ID, "
         "count(malware_type) AS malwareNumber, "
@@ -479,9 +485,10 @@ def get_ecs_force(request):
         score_info_index = 0
         # 做标准化
         for mi in range(len(multi_az_vpc)):
-            multi_az_vpc[mi]['score'] = get_vpc_score(multi_az_vpc[mi]['score_info'], alpha, beta, theta, gamma, max_info)
+            multi_az_vpc[mi]['score'] = get_vpc_score(multi_az_vpc[mi]['score_info'], alpha, beta, theta, gamma,
+                                                      max_info)
             if mi != 0:
-                score_length =  multi_az_vpc[mi - 1]['score'] - multi_az_vpc[mi]['score']
+                score_length = multi_az_vpc[mi - 1]['score'] - multi_az_vpc[mi]['score']
                 if score_length > score_max_length:
                     score_info_index = mi
                     score_max_length = score_length
