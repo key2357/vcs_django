@@ -1,5 +1,6 @@
 from backend.config import INIT_TIME, FINAL_TIME
 import datetime
+import numpy as np
 
 
 # 文件过滤
@@ -33,7 +34,8 @@ def get_file_where_str(malware_type_list, malware_subtype_list, malware_filetype
 
 
 # 文件 + 时间 过滤
-def get_file_and_time_where_str(malware_type_list, malware_subtype_list, malware_filetype_list, begin_time_str, end_time_str):
+def get_file_and_time_where_str(malware_type_list, malware_subtype_list, malware_filetype_list, begin_time_str,
+                                end_time_str):
     where_str = ''
     malware_type_str = '\',\''.join(malware_type_list)
     malware_subtype_str = '\',\''.join(malware_subtype_list)
@@ -71,7 +73,9 @@ def get_time_where_str(begin_time_str, end_time_str):
 
 
 def get_slice_where_str(begin_time_str, end_time_str):
-    where_str = 'where source_create_time > \'' + str(begin_time_str) + '\' and source_create_time < \'' + str(end_time_str) + '\' and target_create_time > \'' + str(begin_time_str) + '\' and target_create_time < \'' + str(end_time_str) + '\' '
+    where_str = 'where source_create_time > \'' + str(begin_time_str) + '\' and source_create_time < \'' + str(
+        end_time_str) + '\' and target_create_time > \'' + str(begin_time_str) + '\' and target_create_time < \'' + str(
+        end_time_str) + '\' '
     return where_str
 
 
@@ -88,6 +92,47 @@ def has_filter_func(file_filter):
         has_filter = False
     return has_filter
 
+
+def get_vpc_score_info(vpc, max_info):
+    malware_sub_type = set()
+    malware_type = set()
+    file_num = []
+    for az in vpc['AS_ECS']:
+        for ecs in az['AS_ECS_TYPE']:
+            file_num.append(ecs['ecsFileNum'])
+            for mt in ecs['malware_type']:
+                malware_type.add(mt)
+            for ms in ecs['malware_subtype']:
+                malware_sub_type.add(ms)
+
+    # 计算大类类型数
+    malware_type_num = len(malware_type) / 3
+    # 计算小类类型数
+    malware_sub_type_num = len(malware_sub_type) / 14
+    # 计算文件总数：
+    file_total = 0
+    for fn in file_num:
+        file_total += fn
+
+    # 计算文件标准差
+    np_file_num = np.array(file_num)
+    std_data = np.std(np_file_num)
+
+    score_info = [file_total, malware_type_num, malware_sub_type_num, std_data]
+    if file_total > max_info[0]:
+        max_info[0] = file_total
+    if malware_type_num > max_info[1]:
+        max_info[1] = malware_type_num
+    if malware_sub_type_num > max_info[2]:
+        max_info[2] = malware_sub_type_num
+    if std_data > max_info[3]:
+        max_info[3] = std_data
+    return score_info, max_info
+
+
+def get_vpc_score(score_info, alpha, beta, theta, gamma, max_info):
+    return alpha * score_info[0] / max_info[0] + beta * score_info[1] / max_info[1] + theta * score_info[
+        2] / max_info[2] + gamma * score_info[3] / max_info[3]
 
 # def change_file(file):
 #     if file['categories'] == '' and file['subtype'] == '':

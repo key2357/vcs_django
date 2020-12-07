@@ -1,7 +1,7 @@
 from django.http import HttpResponse
 from django.db import connection
 from backend.util import get_file_where_str, get_file_and_time_where_str, get_time_str, get_time_where_str, \
-    get_slice_where_str, get_timestamp, has_filter_func
+    get_slice_where_str, get_timestamp, has_filter_func, get_vpc_score_info, get_vpc_score
 from vcs_django.settings import BASE_DIR
 from backend.config import MALWARE_SUBTYPE, FINAL_TIME, INIT_TIME
 import pandas as pd
@@ -13,299 +13,32 @@ import math
 import networkx as nx
 
 
-# 取文件信息
-def ge_tree(fr_now_node, fr_iteration, parent, file_uuid_md5_info):
-    if fr_iteration:
-        for frkey in fr_iteration:
-            if parent == '':
-                fr_now_node.append({
-                    'name': frkey,
-                })
-            else:
-                str_key = frkey + '|' + parent
-                fr_now_node.append({
-                    'uuid': file_uuid_md5_info[str_key]['uuid'],
-                    'file_md5': file_uuid_md5_info[str_key]['file_md5'],
-                    'name': frkey,
-                    'caller': file_uuid_md5_info[str_key]['caller'],
-                    'argc': file_uuid_md5_info[str_key]['argc'],
-                    'argv': file_uuid_md5_info[str_key]['argv'],
-                    'return': file_uuid_md5_info[str_key]['return'],
-                    'index': file_uuid_md5_info[str_key]['index'],
-                    'dynamic': file_uuid_md5_info[str_key]['dynamic'],
-                    'call_num': file_uuid_md5_info[str_key]['call_num'],
-                    'dynamic_index': file_uuid_md5_info[str_key]['dynamic_index'],
-                    'all_index': file_uuid_md5_info[str_key]['all_index'],
-                    'df': file_uuid_md5_info[str_key]['df']
-                })
-
-            if fr_iteration[frkey]:
-                fr_now_node[len(fr_now_node) - 1]['children'] = []
-                const_fr_now_node = fr_now_node[len(fr_now_node) - 1]['children']
-                const_fr_iteration = fr_iteration[frkey]
-                const_parent = frkey
-                ge_tree(const_fr_now_node, const_fr_iteration, const_parent, file_uuid_md5_info)
-
-    return fr_now_node, fr_iteration
-
-
 # import matplotlib.pyplot as plt
 # 13903 373668
 def test(request):
     # 测试一个uuid-md5
-    cursor = connection.cursor()
-    cursor.execute("select uuid, file_md5, `name`, `caller`, argc, argv, `return`, `index`, dynamic "
-                   "from malware_op_code where uuid = 'ac6440efd0d224d0437c2e56bba9a789' and "
-                   "file_md5 = 'fcee6226d09d150bfa5f103bee61fbde' and `name` = 'htmlspecialchars' and caller = 'eval'")
+    # cursor = connection.cursor()
+    # cursor.execute("select uuid, file_md5, dynamic from malware_op_code")
+    # desc = cursor.description
+    # all_data = cursor.fetchall()
+    # ecs_force_and_file = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+    #
+    # something = ['', '[0]', '[0, 0]', '[0, 0, 0]', '[0, 0, 0, 0]', '[0, 0, 0, 0, 0]', '[0, 0, 0, 0, 0, 0]', '[0, 0, 0, 0, 0, 0, 0]', '[0, 0, 0, 0, 0, 0, 0, 0]', '[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]']
+    # another = ['']
+    # uuid_md5_set = set()
+    # for e in ecs_force_and_file:
+    #     if e['dynamic'] not in another:
+    #         str_key = e['uuid'] + e['file_md5']
+    #         uuid_md5_set.add(str_key)
+    #
+    # print(len(uuid_md5_set))
 
-    desc = cursor.description
-    all_data = cursor.fetchall()
-    ecs_force_and_file = [dict(zip([col[0] for col in desc], row)) for row in all_data]
-    for e in ecs_force_and_file:
-        print(e["index"])
+    # for e in ecs_force_and_file:
+    #     print(e["index"])
 
     # name = ['uuid', 'file_md5', 'index']
     # test = pd.DataFrame(columns=name, data=ecs_force_and_file)
     # test.to_csv('./example.csv')
-
-    # 读取opcode_example_result.csv
-    df = pd.read_csv(str(BASE_DIR) + '//opcode_example_result.csv', usecols=[1, 2])
-    data_color = df.iloc[:, 0:2].values
-    data_color_list = []
-    for i in range(len(data_color)):
-        data_color_list.append({
-            'uuid': data_color[i][0],
-            'file_md5': data_color[i][1]
-        })
-
-    for index in range(5, 6):
-        # 取opcode 其中dynamic里面不要全是0的，然后数据量大一点。然后一个文件下caller去重后种类多一点的。加一个字段order
-        cursor = connection.cursor()
-        cursor.execute("select uuid, file_md5, `name`, `caller`, argc, argv, `return`, `index`, dynamic "
-                       "from malware_op_code where uuid = '{0}' and file_md5 = '{1}'".format(
-            data_color_list[index]['uuid'],
-            data_color_list[index][
-                'file_md5']))
-        print(data_color_list[index]['uuid'], data_color_list[index]['file_md5'])
-        desc = cursor.description
-        all_data = cursor.fetchall()
-        ecs_force_and_file = [dict(zip([col[0] for col in desc], row)) for row in all_data]
-
-        edge_dict = {}
-        for e in ecs_force_and_file:
-            str_key = e['name'] + e['caller'] + e['argc']
-
-            dynamic = e['dynamic']
-            dynamic_array = dynamic[1:len(dynamic) - 1].split(',')
-            dynamic_handle = []
-            dynamic_index = []
-            argc = int(e['argc'])
-
-            if str_key not in edge_dict:
-                all_index = []
-                all_index.append(e['index'])
-                for d in dynamic_array:
-                    if d == '':
-                        d = 0
-                    dynamic_handle.append(int(d))
-                    if int(d) != 0:
-                        dynamic_index.append([int(e['index'])])
-                    else:
-                        dynamic_index.append([])
-
-                if int(argc) > len(dynamic_array):
-                    for i in range(int(argc - len(dynamic_array))):
-                        dynamic_handle.append(0)
-                        dynamic_index.append([])
-
-                edge_dict[str_key] = {
-                    'uuid': e['uuid'],
-                    'file_md5': e['file_md5'],
-                    'name': e['name'],
-                    'caller': e['caller'],
-                    'argc': e['argc'],
-                    'argv': e['argv'],
-                    'return': e['return'],
-                    'index': int(e['index']),
-                    'dynamic': dynamic_handle,
-                    'call_num': 1,
-                    'dynamic_index': dynamic_index,
-                    'all_index': all_index,
-                    'df': 0,
-                }
-
-            else:
-                # 比较
-                for d in dynamic_array:
-                    if d == '':
-                        d = 0
-                    dynamic_handle.append(int(d))
-
-                if int(argc) > len(dynamic_array):
-                    for i in range(int(argc - len(dynamic_array))):
-                        dynamic_handle.append(0)
-
-                old_dynamic = edge_dict[str_key]['dynamic']
-
-                if e['index'] not in edge_dict[str_key]['all_index']:
-                    edge_dict[str_key]['all_index'].append(e['index'])
-
-                for i in range(len(dynamic_handle)):
-                    if old_dynamic[i] == 0 and dynamic_handle[i] > 0:
-                        edge_dict[str_key]['df'] = 1
-                        edge_dict[str_key]['dynamic_index'][i].append(int(e['index']))
-
-                    elif old_dynamic[i] > 0 and dynamic_handle[i] == 0:
-                        edge_dict[str_key]['df'] = 1
-
-                edge_dict[str_key]['call_num'] += 1
-                if int(e['index']) < int(edge_dict[str_key]['index']):
-                    edge_dict[str_key]['index'] = int(e['index'])
-
-        result_data = []
-        for ekey in edge_dict:
-            result_data.append(edge_dict[ekey])
-
-        result_data = sorted(result_data, key=lambda x: x['index'])
-
-        name = ['uuid', 'file_md5', 'name', 'caller', 'argc', 'argv', 'return',
-                'index', 'dynamic', 'call_num', 'dynamic_index', 'all_index', 'df']
-        test = pd.DataFrame(columns=name, data=result_data)
-        test.to_csv('./opcode_example/aa_opcode_example_' + str(index) + '.csv', index=0)
-
-    # for index in range(50):
-    #     df = pd.read_csv(str(BASE_DIR) + '//opcode_example//opcode_example_' + str(int(index)) + '.csv', usecols=[2, 3])
-    #     data_color = df.iloc[:, 0:2].values
-    #     edge_set = set()
-    #     for i in range(len(data_color)):
-    #         edge_set.add((data_color[i][0], data_color[i][1]))
-    #
-    #     # u_set 保存的点  e_set 保存的边
-    #     u_set = set()
-    #     u_set.add('__main__')
-    #     e_set_dict = {}
-    #     # 先以__main__为起点
-    #     # 一层一层
-    #
-    #     old_order = set()
-    #     for e in edge_set:
-    #         str_key = e[1] + '|' + e[0]
-    #         if e[1] == '__main__' and e[0] != '__main__':
-    #             old_order.add(e[0])
-    #             e_set_dict[str_key] = 0
-    #
-    #     count = 1
-    #     is_continue = True
-    #     while is_continue:
-    #         before_len = len(e_set_dict)
-    #         new_order = set()
-    #         for e in edge_set:
-    #             str_key = e[1] + '|' + e[0]
-    #             if str_key not in e_set_dict and e[1] in old_order and e[0] != e[1]:
-    #                 new_order.add(e[0])
-    #                 e_set_dict[str_key] = count
-    #         after_len = len(e_set_dict)
-    #         if before_len == after_len:
-    #             is_continue = False
-    #             e_set_dict['order_deep'] = count
-    #         old_order = new_order
-    #         count += 1
-    #
-    #     result_tree = {
-    #         '__main__': {},
-    #     }
-    #
-    #     for i in range(e_set_dict['order_deep']):
-    #         for ekey in e_set_dict:
-    #             if e_set_dict[ekey] == i:
-    #
-    #                 key_array = ekey.split('|')
-    #                 caller = key_array[0]
-    #                 name = key_array[1]
-    #
-    #                 # 回溯
-    #                 deep_now = e_set_dict[ekey]
-    #                 trap = [name, caller]
-    #
-    #                 while caller != '__main__':
-    #                     deep_now -= 1
-    #                     for eekey in e_set_dict:
-    #                         if eekey != 'order_deep':
-    #                             key_array = eekey.split('|')
-    #                             e_caller = key_array[0]
-    #                             e_name = key_array[1]
-    #
-    #                             if e_name == caller and e_set_dict[eekey] == deep_now:
-    #                                 caller = e_caller
-    #                                 trap.append(caller)
-    #
-    #                 # 确定到父节点
-    #                 parent = result_tree
-    #                 if len(trap) == 2:
-    #                     print(index)
-    #                     parent['__main__'][trap[0]] = {}
-    #                 else:
-    #                     for ii in range(len(trap) - 1, 0, -1):
-    #                         parent = parent[trap[ii]]
-    #                     parent[trap[0]] = {}
-    #
-    #     # 读取信息
-    #     df = pd.read_csv(str(BASE_DIR) + '//opcode_example//opcode_example_' + str(int(index)) + '.csv',
-    #                      usecols=[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
-    #
-    #     data_color = df.iloc[:, 0:13].values
-    #     data_color_dict = {}
-    #     for i in range(len(data_color)):
-    #         str_key = data_color[i][2] + '|' + data_color[i][3]
-    #         data_color_dict[str_key] = {
-    #             'uuid': data_color[i][0],
-    #             'file_md5': data_color[i][1],
-    #             'name': data_color[i][2],
-    #             'caller': data_color[i][3],
-    #             'argc': data_color[i][4],
-    #             'argv': data_color[i][5],
-    #             'return': data_color[i][6],
-    #             'index': data_color[i][7],
-    #             'dynamic': data_color[i][8],
-    #             'call_num': data_color[i][9],
-    #             'dynamic_index': data_color[i][10],
-    #             'all_index': data_color[i][11],
-    #             'df': data_color[i][12]
-    #         }
-    #
-    #     file_uuid_md5_info = data_color_dict
-    #     another_tree = []
-    #     if result_tree:
-    #         now_node = another_tree
-    #         iteration = result_tree
-    #         parent = ''
-    #         ge_tree(now_node, iteration, parent, file_uuid_md5_info)
-    #
-    #     json_data = json.dumps(another_tree)
-    #     json_data = json_data[1:len(json_data) - 1]
-    #     file_object = open('./opcode_tree/opcode_example_' + str(int(index) + 1) + '.json', 'w')
-    #     file_object.write(json_data)
-    #     file_object.close()
-
-    # order_3 = set()
-    # for e in edge_set:
-    #     str_key = e[1] + '|' + e[0]
-    #     if str_key not in e_set_dict and e[1] in order_2:
-    #         e_set_dict[str_key] = 2
-    #
-    # for e in edge_set:
-    #     str_key = e[1] + '|' + e[0]
-    #     if str_key not in e_set_dict and e[1] in order_3:
-    #         e_set_dict[str_key] = 3
-
-    # order_4 = set()
-    # for e in edge_set:
-    #     if e[1] in order_3 and e[0] not in u_set:
-    #         order_4.add(e[0])
-    #         u_set.add(e[0])
-
-    #
-    # print(len(order_4), len(order_3), len(order_2), len(order_1))
 
     data = {}
     return HttpResponse(json.dumps(data), content_type='application/json')
@@ -417,26 +150,31 @@ def get_force(request):
 
 # view3 态势等级视图 获取每个ECS的信息（包括ECS_ID、态势等级、聚类结果、半径、态势值、是否高危、是否高亮、文件信息）
 def get_ecs_force(request):
-    params = json.loads(request.body)
-    slice = params['slice']
-    file_filter = params['fileFilter']
-    file = params['file']
+    # params = json.loads(request.body)
+    # slice = params['slice']
+    # file_filter = params['fileFilter']
+    # file = params['file']
 
-    # slice = {
-    #     'beginTime': 0.5,
-    #     'endTime': 0.6
-    # }
-    #
-    # file_filter = {
-    #     'malwareType': ['网站后门', '恶意进程'],
-    #     'malwareSubtype': ['WEBSHELL', '挖矿程序'],
-    #     'fileType': ['BIN', 'WEBSHELL']
-    # }
-    #
-    # file = {
-    #     'categories': 'malwareSubtype',
-    #     'subtype': 'WEBSHELL'
-    # }
+    alpha = 0.5
+    beta = 0.5
+    theta = 0.5
+    gamma = 0.5
+
+    slice = {
+        'beginTime': 0.58,
+        'endTime': 0.6
+    }
+
+    file_filter = {
+        'malwareType': ['网站后门', '恶意进程'],
+        'malwareSubtype': ['WEBSHELL', '挖矿程序'],
+        'fileType': ['BIN', 'WEBSHELL']
+    }
+
+    file = {
+        'categories': 'malwareSubtype',
+        'subtype': 'WEBSHELL'
+    }
 
     # change file
     # file = change_file(file)
@@ -536,23 +274,30 @@ def get_ecs_force(request):
                 "恶意脚本": 0,
             })
 
-    # if not ecs_force_and_file:
-    #     ReturnData = {}
-    #     return HttpResponse(json.dumps(ReturnData), content_type='application/json')
-
     # webshell, DDOS木马,被污染的基础软件,恶意程序,恶意脚本文件,感染型病毒,黑客工具,后门程序,勒索病毒,漏洞利用程序,木马程序,蠕虫病毒,挖矿程序,自变异木马
     # 处理文件信息
     file_info_count = 0
     file_info = []
     file_info_number = []
+    file_info_malware_type = []
+    file_info_malware_subtype = []
     for d in ecs_force_and_file:
         file_info.append({})
         file_info_number.append({})
+        file_info_malware_type.append([])
+        file_info_malware_subtype.append([])
         all_file_number = d['malwareNumber']
         for sub_type in MALWARE_SUBTYPE:
             if int(d[sub_type]) != 0:
                 file_info_number[file_info_count][sub_type] = int(d[sub_type])
                 file_info[file_info_count][sub_type] = int(d[sub_type]) / all_file_number
+                if sub_type not in file_info_malware_type[file_info_count]:
+                    file_info_malware_type[file_info_count].append(sub_type)
+
+        for malware_type in ['网站后门', '恶意进程', '恶意脚本']:
+            if int(d[malware_type]) != 0:
+                if malware_type not in file_info_malware_subtype[file_info_count]:
+                    file_info_malware_subtype[file_info_count].append(malware_type)
         file_info_count += 1
 
     # 再修改一些文件信息的格式
@@ -638,6 +383,9 @@ def get_ecs_force(request):
     AS_ECS_TYPE = []
     for i in range(len(ecs_force_and_file)):
         AS_ECS_TYPE.append({
+            'Region_ID': ecs_force_and_file[i]['Region_ID'],
+            'VPC_ID': ecs_force_and_file[i]['VPC_ID'],
+            'AS_ID': ecs_force_and_file[i]['AS_ID'],
             'ECS_ID': ecs_force_and_file[i]['ESC_ID'],
             'type': level_value_info[i],
             'radius': radius[i],
@@ -645,46 +393,51 @@ def get_ecs_force(request):
             # 'forceValue': math.sqrt(level_value[i]),
             'isExtremelyDangerous': is_extremely_dangerous[i],
             'isHighLight': is_highlight[i],
+            'ecsFileNum': ecs_force_and_file[i]['malwareNumber'],
+            'malware_type': file_info_malware_type[i],
+            'malware_subtype': file_info_malware_subtype[i]
         })
 
     AS_ECS = []
     AS_ECS_set = set()
     for i in range(len(AS_ECS_TYPE)):
-        # 判断是否含有AS
-        if ecs_force_and_file[i]['AS_ID'] not in AS_ECS_set:
-            AS_ECS.append({
-                'ECS_NUM': 1,
-                'Region_ID': ecs_force_and_file[i]['Region_ID'],
-                'VPC_ID': ecs_force_and_file[i]['VPC_ID'],
-                'AS_ID': ecs_force_and_file[i]['AS_ID'],
-                'AS_ECS_TYPE': [AS_ECS_TYPE[i]]
-            })
-            AS_ECS_set.add(ecs_force_and_file[i]['AS_ID'])
-        else:
-            for AS in AS_ECS:
-                if AS['AS_ID'] == ecs_force_and_file[i]['AS_ID']:
-                    AS['AS_ECS_TYPE'].append(AS_ECS_TYPE[i])
-                    AS['ECS_NUM'] += 1
+        if AS_ECS_TYPE[i]['AS_ID'] != '':
+            if AS_ECS_TYPE[i]['AS_ID'] not in AS_ECS_set:
+                AS_ECS.append({
+                    'ECS_NUM': 1,
+                    'Region_ID': AS_ECS_TYPE[i]['Region_ID'],
+                    'VPC_ID': AS_ECS_TYPE[i]['VPC_ID'],
+                    'AS_ID': AS_ECS_TYPE[i]['AS_ID'],
+                    'AS_ECS_TYPE': [AS_ECS_TYPE[i]]
+                })
+                AS_ECS_set.add(ecs_force_and_file[i]['AS_ID'])
+            else:
+                for AS in AS_ECS:
+                    if AS['AS_ID'] == AS_ECS_TYPE[i]['AS_ID']:
+                        AS['AS_ECS_TYPE'].append(AS_ECS_TYPE[i])
+                        AS['ECS_NUM'] += 1
 
     Region_VPC = []
     Region_VPC_set = set()
 
     for i in range(len(AS_ECS)):
         # 判断是否含有vpc
-        if AS_ECS[i]['VPC_ID'] not in Region_VPC_set:
-            Region_VPC.append({
-                'AS_NUM': 1,
-                'ECS_NUM': AS_ECS[i]['ECS_NUM'],
-                'VPC_ID': AS_ECS[i]['VPC_ID'],
-                'AS_ECS': [AS_ECS[i]]
-            })
-            Region_VPC_set.add(AS_ECS[i]['VPC_ID'])
-        else:
-            for VPC in Region_VPC:
-                if VPC['VPC_ID'] == AS_ECS[i]['VPC_ID']:
-                    VPC['AS_ECS'].append(AS_ECS[i])
-                    VPC['AS_NUM'] += 1
-                    VPC['ECS_NUM'] += AS_ECS[i]['ECS_NUM']
+        if AS_ECS[i]['VPC_ID'] != '':
+            if AS_ECS[i]['VPC_ID'] not in Region_VPC_set:
+                Region_VPC.append({
+                    'AS_NUM': 1,
+                    'ECS_NUM': AS_ECS[i]['ECS_NUM'],
+                    'VPC_ID': AS_ECS[i]['VPC_ID'],
+                    'AS_ECS': [AS_ECS[i]]
+                })
+                Region_VPC_set.add(AS_ECS[i]['VPC_ID'])
+            else:
+                for VPC in Region_VPC:
+                    if VPC['VPC_ID'] == AS_ECS[i]['VPC_ID']:
+                        VPC['AS_ECS'].append(AS_ECS[i])
+                        VPC['AS_NUM'] += 1
+                        VPC['ECS_NUM'] += AS_ECS[i]['ECS_NUM']
+
     allData = []
     Region_set = set()
     for i in range(len(Region_VPC)):
@@ -706,10 +459,137 @@ def get_ecs_force(request):
                     Region['AS_NUM'] += Region_VPC[i]['AS_NUM']
                     Region['ECS_NUM'] += Region_VPC[i]['ECS_NUM']
 
-    # allData 里面每个region排序
+    # allData 里面每个vpc进行组间排序
     for i in range(len(allData)):
-        region = sorted(allData[i]['Region_VPC'], key=lambda x: x['ECS_NUM'], reverse=1)
+        multi_az_vpc = []
+        flower = []
+        chain = []
+        only_ecs = []
+        max_info = [0, 0, 0, 0]  # 用于标准化
+        # multi-az
+        for vpc in allData[i]['Region_VPC']:
+            if vpc['AS_NUM'] > 1 and vpc['ECS_NUM'] > 1 and vpc['VPC_ID'] != '':
+                # 计算vpc的得分
+                score_info, max_info = get_vpc_score_info(vpc, max_info)
+                vpc['score_info'] = score_info
+                vpc['rank'] = 0
+                multi_az_vpc.append(vpc)
+
+        score_max_length = 0
+        score_info_index = 0
+        # 做标准化
+        for mi in range(len(multi_az_vpc)):
+            multi_az_vpc[mi]['score'] = get_vpc_score(multi_az_vpc[mi]['score_info'], alpha, beta, theta, gamma, max_info)
+            if mi != 0:
+                score_length =  multi_az_vpc[mi - 1]['score'] - multi_az_vpc[mi]['score']
+                if score_length > score_max_length:
+                    score_info_index = mi
+                    score_max_length = score_length
+
+        # 是否隐藏
+        for mi in range(len(multi_az_vpc)):
+            if mi == 0:
+                multi_az_vpc[mi]['isHide'] = False
+            elif mi < score_info_index:
+                multi_az_vpc[mi]['isHide'] = False
+            else:
+                multi_az_vpc[mi]['isHide'] = True
+
+        # flower
+        for vpc in allData[i]['Region_VPC']:
+            if vpc['AS_NUM'] == 1 and vpc['ECS_NUM'] > 1 and vpc['VPC_ID'] != '':
+                # 计算vpc的得分
+                score_info, max_info = get_vpc_score_info(vpc, max_info)
+                vpc['score_info'] = score_info
+                vpc['rank'] = 1
+                flower.append(vpc)
+
+        score_max_length = 0
+        score_info_index = 0
+        # 做标准化
+        for mi in range(len(flower)):
+            flower[mi]['score'] = get_vpc_score(flower[mi]['score_info'], alpha, beta, theta, gamma, max_info)
+            if mi != 0:
+                score_length = flower[mi - 1]['score'] - flower[mi]['score']
+                if score_length > score_max_length:
+                    score_info_index = mi
+                    score_max_length = score_length
+
+        # 是否隐藏
+        for mi in range(len(flower)):
+            if mi == 0:
+                flower[mi]['isHide'] = False
+            elif mi < score_info_index:
+                flower[mi]['isHide'] = False
+            else:
+                flower[mi]['isHide'] = True
+
+        # chain
+        for vpc in allData[i]['Region_VPC']:
+            if vpc['AS_NUM'] == 1 and vpc['ECS_NUM'] == 1 and vpc['VPC_ID'] != '':
+                # 计算vpc的得分
+                score_info, max_info = get_vpc_score_info(vpc, max_info)
+                vpc['score_info'] = score_info
+                vpc['rank'] = 2
+                chain.append(vpc)
+
+        score_max_length = 0
+        score_info_index = 0
+        # 做标准化
+        for mi in range(len(chain)):
+            chain[mi]['score'] = get_vpc_score(chain[mi]['score_info'], alpha, beta, theta, gamma, max_info)
+            if mi != 0:
+                score_length = chain[mi - 1]['score'] - chain[mi]['score']
+                if score_length > score_max_length:
+                    score_info_index = mi
+                    score_max_length = score_length
+
+        # 是否隐藏
+        for mi in range(len(chain)):
+            if mi == 0:
+                chain[mi]['isHide'] = False
+            elif mi < score_info_index:
+                chain[mi]['isHide'] = False
+            else:
+                chain[mi]['isHide'] = True
+
+        # only-ecs
+        as_ecs_type = []
+        for ecs in AS_ECS_TYPE:
+            if ecs['VPC_ID'] == "" and ecs['Region_ID'] == allData[i]['Region_ID']:
+                as_ecs_type.append(ecs)
+        if as_ecs_type:
+            only_ecs.append({
+                'VPC_ID': '',
+                'score': 0,
+                'score_info': [0, 0, 0, 0],
+                'rank': 3,
+                'isHide': False,
+                'AS_ECS':
+                    [{
+                        'AS_ID': '',
+                        'AS_ECS_TYPE': as_ecs_type
+                    }]
+            })
+
+        region = []
+        # 根据score排序
+        multi_az_vpc = sorted(multi_az_vpc, key=lambda value: value['score'], reverse=1)
+        flower = sorted(flower, key=lambda value: value['score'], reverse=1)
+        chain = sorted(chain, key=lambda value: value['score'], reverse=1)
+        only_ecs = sorted(only_ecs, key=lambda value: value['score'], reverse=1)
+
+        for mav in multi_az_vpc:
+            region.append(mav)
+        for fl in flower:
+            region.append(fl)
+        for ch in chain:
+            region.append(ch)
+        for oe in only_ecs:
+            region.append(oe)
+
         allData[i]['Region_VPC'] = region
+
     # 查询文件数量
     cursor.execute("select count(*) AS malwareNumber, "
                    "SUM(CASE file_type WHEN 'WEBSHELL' Then 1 ELSE 0 END) AS webshellNumber, "
