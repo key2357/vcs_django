@@ -79,13 +79,13 @@ def get_time_line_chart(request):
 
     # 文件过滤为空的逻辑，以确定where_str
     # file_filter = {
-    #     'malwareType': ['网站后门', '恶意进程'],
-    #     'malwareSubtype': ['WEBSHELL', '挖矿程序'],
-    #     'fileType': ['BIN', 'WEBSHELL']
+    #     'malwareType': [],
+    #     'malwareSubtype': [],
+    #     'fileType': []
     # }
     #
-    # line_type = 'MalwareCount'
-    # time_type = '1m'
+    # line_type = 'MalwareType'
+    # time_type = '1 month'
 
     has_filter = has_filter_func(file_filter)
 
@@ -97,7 +97,7 @@ def get_time_line_chart(request):
         where_str = get_file_and_time_where_str(malware_type_list, malware_subtype_list, malware_filetype_list,
                                                 begin_time_str, end_time_str)
     else:
-        begin_time_str, end_time_str = get_time_str_by_time_type('time_type')
+        begin_time_str, end_time_str = get_time_str_by_time_type(time_type)
         where_str = get_time_where_str(begin_time_str, end_time_str)
 
     cursor = connection.cursor()
@@ -170,7 +170,7 @@ def get_time_line_chart(request):
                        "sum(case when malware_type='木马程序' then 1 else 0 end) as 木马程序,"
                        "sum(case when malware_type='蠕虫病毒' then 1 else 0 end) as 蠕虫病毒,"
                        "sum(case when malware_type='挖矿程序' then 1 else 0 end) as 挖矿程序,"
-                       "sum(case when malware_type='自变异木马' then 1 else 0 end) as 自变异木马, "
+                       "sum(case when malware_type='自变异木马' then 1 else 0 end) as 自变异木马 "
                        "from malware_base_info "
                        + where_str + " group by DATE_FORMAT(create_time, '%Y-%m-%d')")
         desc = cursor.description
@@ -387,6 +387,100 @@ def get_space_tree_map(request):
 
     Data['topologicalMap'] = region_list
     return HttpResponse(json.dumps(Data), content_type='application/json')
+
+
+# opcode 中的层次树
+def get_opcode_tree_map(request):
+    # params = json.loads(request.body)
+    # params_uuid = params['uuid']
+    # params_file_md5 = params['file_md5']
+    params_uuid = '2786278ac90e43cac6fa717884c5a140'
+    params_file_md5 = '00b0dfc7f918e5114e083f501ffbcdf3'
+
+    cursor = connection.cursor()
+    cursor.execute("select uuid, file_md5, `name`, `caller`, argc, argv, `return`, `index`, dynamic "
+                   "from malware_op_code where uuid = '{0}' and file_md5 = '{1}'".format(params_uuid, params_file_md5))
+    desc = cursor.description
+    all_data = cursor.fetchall()
+    ecs_filemd5_opcode = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+
+    edge_dict = {}
+    for e in ecs_filemd5_opcode:
+        str_key = e['name'] + e['caller'] + e['argc']
+
+        dynamic = e['dynamic']
+        dynamic_array = dynamic[1:len(dynamic) - 1].split(',')
+        dynamic_handle = []
+        dynamic_index = []
+        argc = int(e['argc'])
+
+        if str_key not in edge_dict:
+            all_index = []
+            all_index.append(e['index'])
+            for d in dynamic_array:
+                if d == '':
+                    d = 0
+                dynamic_handle.append(int(d))
+                if int(d) != 0:
+                    dynamic_index.append([int(e['index'])])
+                else:
+                    dynamic_index.append([])
+
+            if int(argc) > len(dynamic_array):
+                for i in range(int(argc - len(dynamic_array))):
+                    dynamic_handle.append(0)
+                    dynamic_index.append([])
+
+            edge_dict[str_key] = {
+                'uuid': e['uuid'],
+                'file_md5': e['file_md5'],
+                'name': e['name'],
+                'caller': e['caller'],
+                'argc': e['argc'],
+                'argv': e['argv'],
+                'return': e['return'],
+                'index': int(e['index']),
+                'dynamic': dynamic_handle,
+                'call_num': 1,
+                'dynamic_index': dynamic_index,
+                'all_index': all_index,
+                'df': 0,
+            }
+
+        else:
+            # 比较
+            for d in dynamic_array:
+                if d == '':
+                    d = 0
+                dynamic_handle.append(int(d))
+
+            if int(argc) > len(dynamic_array):
+                for i in range(int(argc - len(dynamic_array))):
+                    dynamic_handle.append(0)
+
+            old_dynamic = edge_dict[str_key]['dynamic']
+
+            if e['index'] not in edge_dict[str_key]['all_index']:
+                edge_dict[str_key]['all_index'].append(e['index'])
+
+            for i in range(len(dynamic_handle)):
+                if old_dynamic[i] == 0 and dynamic_handle[i] > 0:
+                    edge_dict[str_key]['df'] = 1
+                    edge_dict[str_key]['dynamic_index'][i].append(int(e['index']))
+                    edge_dict[str_key]['dynamic'][i] = dynamic_handle[i]
+                elif old_dynamic[i] > 0 and dynamic_handle[i] == 0:
+                    edge_dict[str_key]['df'] = 1
+
+            edge_dict[str_key]['call_num'] += 1
+            if int(e['index']) < int(edge_dict[str_key]['index']):
+                edge_dict[str_key]['index'] = int(e['index'])
+
+    result_data = []
+    for ekey in edge_dict:
+        result_data.append(edge_dict[ekey])
+
+    result_data = sorted(result_data, key=lambda x: x['index'])
+    return 'ok'
 
 
 # 这个可以改为静态的了

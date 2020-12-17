@@ -138,7 +138,7 @@ def get_vpc_score(score_info, alpha, beta, theta, gamma, max_info):
 def get_time_str_by_time_type(time_type):
     if time_type == 'all':
         begin_time_str, end_time_str = get_time_str(0, 1)
-    elif time_type == '7 day':
+    elif time_type == '7 days':
         begin_time_str = '2020-10-27 00-00-00'
         end_time_str = '2020-11-03 00-00-00'
     elif time_type == '1 month':
