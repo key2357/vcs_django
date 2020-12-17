@@ -72,20 +72,20 @@ def test(request):
 
 
 def get_time_line_chart(request):
-    # params = json.loads(request.body)
-    # file_filter = params['filter']
-    # line_type = params['type']
-    # time_type = patams['time']
+    params = json.loads(request.body)
+    file_filter = params['filter']
+    line_type = params['type']
+    time_type = params['time']
 
     # 文件过滤为空的逻辑，以确定where_str
-    file_filter = {
-        'malwareType': ['网站后门', '恶意进程'],
-        'malwareSubtype': ['WEBSHELL', '挖矿程序'],
-        'fileType': ['BIN', 'WEBSHELL']
-    }
-
-    line_type = 'MalwareCount'
-    time_type = '1m'
+    # file_filter = {
+    #     'malwareType': ['网站后门', '恶意进程'],
+    #     'malwareSubtype': ['WEBSHELL', '挖矿程序'],
+    #     'fileType': ['BIN', 'WEBSHELL']
+    # }
+    #
+    # line_type = 'MalwareCount'
+    # time_type = '1m'
 
     has_filter = has_filter_func(file_filter)
 
@@ -197,20 +197,20 @@ def get_time_line_chart(request):
 
 # UI-v2 view1 treeMap and 拓扑可视化图谱
 def get_space_tree_map(request):
-    # params = json.loads(request.body)
-    # file_filter = params['filter']
-    # time_slice = params['slice']
+    params = json.loads(request.body)
+    file_filter = params['filter']
+    time_slice = params['slice']
 
     # 文件过滤为空的逻辑，以确定where_str
-    file_filter = {
-        'malwareType': ['网站后门', '恶意进程'],
-        'malwareSubtype': ['WEBSHELL', '挖矿程序'],
-        'fileType': ['BIN', 'WEBSHELL']
-    }
-    time_slice = {
-        'beginTime': 0.58,
-        'endTime': 0.6
-    }
+    # file_filter = {
+    #     'malwareType': ['网站后门', '恶意进程'],
+    #     'malwareSubtype': ['WEBSHELL', '挖矿程序'],
+    #     'fileType': ['BIN', 'WEBSHELL']
+    # }
+    # time_slice = {
+    #     'beginTime': 0.58,
+    #     'endTime': 0.6
+    # }
 
     has_filter = has_filter_func(file_filter)
 
