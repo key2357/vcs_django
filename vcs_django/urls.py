@@ -26,9 +26,8 @@ urlpatterns = [
     path('getForce/', views.get_force),
     path('getECSForce/', views.get_ecs_force),
     path('getForceGraphByTime/', views.get_force_graph_by_time),
+    path('getTimeLineChart/', views.get_time_line_chart),
+    path('getSpaceTreeMap/', views.get_space_tree_map),
 
 
-
-    # path('getAllESCByRegion/', views.get_all_ESC_by_Region),
-    # path('getbadFileByEeleECS/', views.get_bad_file_by_ECS)
 ]

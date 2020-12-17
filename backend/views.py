@@ -1,7 +1,7 @@
 from django.http import HttpResponse
 from django.db import connection
 from backend.util import get_file_where_str, get_file_and_time_where_str, get_time_str, get_time_where_str, \
-    get_slice_where_str, get_timestamp, has_filter_func, get_vpc_score_info, get_vpc_score
+    get_slice_where_str, get_timestamp, has_filter_func, get_vpc_score_info, get_vpc_score, get_time_str_by_time_type
 from vcs_django.settings import BASE_DIR
 from backend.config import MALWARE_SUBTYPE, FINAL_TIME, INIT_TIME
 import pandas as pd
@@ -16,13 +16,40 @@ import networkx as nx
 # import matplotlib.pyplot as plt
 # 13903 373668
 def test(request):
-    # 测试一个uuid-md5
+    cursor = connection.cursor()
+    cursor.execute("select uuid, file_md5, `name`, `caller`, argc, argv, `return`, `index`, dynamic "
+                   "from malware_op_code where uuid = '{0}' and file_md5 = '{1}' and `name` = '{2}' and `index` = '1867'".format(
+        'd50bcde781a14ae1db088cebad732476', 'd5e9ad5b40d06e2c5208b6e20ca7b809', 'strlen'))
+    desc = cursor.description
+    all_data = cursor.fetchall()
+    ecs_force_and_file = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+    print(ecs_force_and_file)
+    # name = ['uuid', 'file_md5', 'name', 'caller', 'argc', 'argv', 'return', 'index', 'dynamic']
+    # test = pd.DataFrame(columns=name, data=ecs_force_and_file)
+    # test.to_csv('./file_opcode_with_dynamic_11869.csv', index=0)
+
+    # 11869
+    # # 测试一个uuid-md5
     # cursor = connection.cursor()
-    # cursor.execute("select uuid, file_md5, dynamic from malware_op_code")
+    # cursor.execute("select `name` from malware_op_code where name like '%zend%'")
     # desc = cursor.description
     # all_data = cursor.fetchall()
     # ecs_force_and_file = [dict(zip([col[0] for col in desc], row)) for row in all_data]
-    #
+    # ecs_force_and_file_set = set()
+    # for e in ecs_force_and_file:
+    #     ecs_force_and_file_set.add(e['name'])
+
+    # print('name like "zend":', ecs_force_and_file_set)
+    # cursor = connection.cursor()
+    # cursor.execute("select caller from malware_op_code where caller like '%zend%'")
+    # desc = cursor.description
+    # all_data = cursor.fetchall()
+    # ecs_force_and_file = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+    # ecs_force_and_file_set = set()
+    # for e in ecs_force_and_file:
+    #     ecs_force_and_file_set.add(e['caller'])
+    # print('caller like "zend":', ecs_force_and_file_set)
+
     # something = ['', '[0]', '[0, 0]', '[0, 0, 0]', '[0, 0, 0, 0]', '[0, 0, 0, 0, 0]', '[0, 0, 0, 0, 0, 0]', '[0, 0, 0, 0, 0, 0, 0]', '[0, 0, 0, 0, 0, 0, 0, 0]', '[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]']
     # another = ['']
     # uuid_md5_set = set()
@@ -42,6 +69,324 @@ def test(request):
 
     data = {}
     return HttpResponse(json.dumps(data), content_type='application/json')
+
+
+def get_time_line_chart(request):
+    # params = json.loads(request.body)
+    # file_filter = params['filter']
+    # line_type = params['type']
+    # time_type = patams['time']
+
+    # 文件过滤为空的逻辑，以确定where_str
+    file_filter = {
+        'malwareType': ['网站后门', '恶意进程'],
+        'malwareSubtype': ['WEBSHELL', '挖矿程序'],
+        'fileType': ['BIN', 'WEBSHELL']
+    }
+
+    line_type = 'MalwareCount'
+    time_type = '1m'
+
+    has_filter = has_filter_func(file_filter)
+
+    if has_filter:
+        malware_type_list = file_filter['malwareType']
+        malware_subtype_list = file_filter['malwareSubtype']
+        malware_filetype_list = file_filter['fileType']
+        begin_time_str, end_time_str = get_time_str_by_time_type(time_type)
+        where_str = get_file_and_time_where_str(malware_type_list, malware_subtype_list, malware_filetype_list,
+                                                begin_time_str, end_time_str)
+    else:
+        begin_time_str, end_time_str = get_time_str_by_time_type('time_type')
+        where_str = get_time_where_str(begin_time_str, end_time_str)
+
+    cursor = connection.cursor()
+
+    Data = []
+    if line_type == 'MalwareCount':
+        # 获取文件数量
+        cursor.execute(
+            "select concat(DATE_FORMAT(create_time, '%Y-%m-%d '),'00:00:00') as time, count(*) AS malwareNumber "
+            "from malware_base_info " + where_str + " group by DATE_FORMAT(create_time, '%Y-%m-%d')")
+        desc = cursor.description
+        all_data = cursor.fetchall()
+        force_value = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+        force_value = sorted(force_value, key=lambda value: value['time'])
+
+        # 处理为接口格式
+        Data.append({
+            'graphName': '文件总数',
+            'graphData': []
+        })
+
+        for i in force_value:
+            if i['time'] != '0000-00-00 00:00:00':
+                Data[0]['graphData'].append({
+                    'time': i['time'],
+                    'val': int(i['malwareNumber'])
+                })
+
+    elif line_type == 'MalwareType':
+        # 获取MalwareType文件数量
+        cursor.execute("select concat(DATE_FORMAT(create_time, '%Y-%m-%d '),'00:00:00') as time, "
+                       "sum(case when malware_class='网站后门' then 1 else 0 end) as 网站后门, "
+                       "sum(case when malware_class='恶意进程' then 1 else 0 end) as 恶意进程, "
+                       "sum(case when malware_class='恶意脚本' then 1 else 0 end) as 恶意脚本 "
+                       "from malware_base_info "
+                       + where_str + " group by DATE_FORMAT(create_time, '%Y-%m-%d')")
+        desc = cursor.description
+        all_data = cursor.fetchall()
+        force_value = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+        force_value = sorted(force_value, key=lambda value: value['time'])
+
+        # 处理为接口格式
+        malware_type = ['网站后门', '恶意进程', '恶意脚本']
+        for i in range(len(malware_type)):
+            Data.append({
+                'graphName': malware_type[i],
+                'graphData': []
+            })
+
+        for f in force_value:
+            if f['time'] != '0000-00-00 00:00:00':
+                for i in range(len(malware_type)):
+                    Data[i]['graphData'].append({
+                        'time': f['time'],
+                        'val': int(f[malware_type[i]])
+                    })
+
+    else:
+        cursor.execute("select concat(DATE_FORMAT(create_time, '%Y-%m-%d '),'00:00:00') as time, "
+                       "sum(case when malware_type='WEBSHELL'then 1 else 0 end) as WEBSHELL, "
+                       "sum(case when malware_type='DDOS木马' then 1 else 0 end) as DDOS木马,"
+                       "sum(case when malware_type='被污染的基础软件' then 1 else 0 end) as 被污染的基础软件,"
+                       "sum(case when malware_type='恶意程序' then 1 else 0 end) as 恶意程序,"
+                       "sum(case when malware_type='恶意脚本文件' then 1 else 0 end) as 恶意脚本文件,"
+                       "sum(case when malware_type='感染型病毒' then 1 else 0 end) as 感染型病毒,"
+                       "sum(case when malware_type='黑客工具' then 1 else 0 end) as 黑客工具,"
+                       "sum(case when malware_type='后门程序' then 1 else 0 end) as 后门程序,"
+                       "sum(case when malware_type='勒索病毒' then 1 else 0 end) as 勒索病毒,"
+                       "sum(case when malware_type='漏洞利用程序' then 1 else 0 end) as 漏洞利用程序,"
+                       "sum(case when malware_type='木马程序' then 1 else 0 end) as 木马程序,"
+                       "sum(case when malware_type='蠕虫病毒' then 1 else 0 end) as 蠕虫病毒,"
+                       "sum(case when malware_type='挖矿程序' then 1 else 0 end) as 挖矿程序,"
+                       "sum(case when malware_type='自变异木马' then 1 else 0 end) as 自变异木马, "
+                       "from malware_base_info "
+                       + where_str + " group by DATE_FORMAT(create_time, '%Y-%m-%d')")
+        desc = cursor.description
+        all_data = cursor.fetchall()
+        force_value = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+        force_value = sorted(force_value, key=lambda value: value['time'])
+
+        # 处理为接口格式
+        for i in range(len(MALWARE_SUBTYPE)):
+            Data.append({
+                'graphName': MALWARE_SUBTYPE[i],
+                'graphData': []
+            })
+
+        for f in force_value:
+            if f['time'] != '0000-00-00 00:00:00':
+                for i in range(len(MALWARE_SUBTYPE)):
+                    Data[i]['graphData'].append({
+                        'time': f['time'],
+                        'val': int(f[MALWARE_SUBTYPE[i]])
+                    })
+    return HttpResponse(json.dumps(Data), content_type='application/json')
+
+
+# UI-v2 view1 treeMap and 拓扑可视化图谱
+def get_space_tree_map(request):
+    # params = json.loads(request.body)
+    # file_filter = params['filter']
+    # time_slice = params['slice']
+
+    # 文件过滤为空的逻辑，以确定where_str
+    file_filter = {
+        'malwareType': ['网站后门', '恶意进程'],
+        'malwareSubtype': ['WEBSHELL', '挖矿程序'],
+        'fileType': ['BIN', 'WEBSHELL']
+    }
+    time_slice = {
+        'beginTime': 0.58,
+        'endTime': 0.6
+    }
+
+    has_filter = has_filter_func(file_filter)
+
+    # 时间片或文件过滤为空的逻辑，以确定where_str
+    if has_filter and time_slice:
+        begin_time_number = time_slice['beginTime']
+        end_time_number = time_slice['endTime']
+        begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
+        malware_type_list = file_filter['malwareType']
+        malware_subtype_list = file_filter['malwareSubtype']
+        malware_filetype_list = file_filter['fileType']
+        where_str = get_file_and_time_where_str(malware_type_list, malware_subtype_list, malware_filetype_list,
+                                                begin_time_str, end_time_str)
+    elif has_filter:
+        malware_type_list = file_filter['malwareType']
+        malware_subtype_list = file_filter['malwareSubtype']
+        malware_filetype_list = file_filter['fileType']
+        begin_time_number = 0
+        end_time_number = 1
+        begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
+        where_str = get_file_and_time_where_str(malware_type_list, malware_subtype_list, malware_filetype_list,
+                                                begin_time_str, end_time_str)
+    elif time_slice:
+        begin_time_number = time_slice['beginTime']
+        end_time_number = time_slice['endTime']
+        begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
+        where_str = get_time_where_str(begin_time_str, end_time_str)
+    else:
+        begin_time_number = 0
+        where_str = ''
+
+    # treeMap
+    cursor = connection.cursor()
+    cursor.execute("select uuid, count(malware_md5) as file_num from malware_base_info " + where_str + " group by uuid")
+    desc = cursor.description
+    all_data = cursor.fetchall()
+    tree_map_uuid = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+
+    cursor = connection.cursor()
+    cursor.execute("select ECS_ID, AS_ID, VPC_ID, Region_ID, pattern from user_netstate_info ")
+    desc = cursor.description
+    all_data = cursor.fetchall()
+    uuid_and_pattern = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+
+    pattern_dict = {}
+    for u in uuid_and_pattern:
+        pattern_dict[u['ECS_ID']] = {
+            'ECS_ID': u['ECS_ID'],
+            'AS_ID': u['AS_ID'],
+            'VPC_ID': u['VPC_ID'],
+            'Region_ID': u['Region_ID'],
+            'pattern': u['pattern']
+        }
+
+    pattern_number_dict = {}
+
+    pattern_list = ['multi-az', 'flower', 'chain', 'only-ecs']
+    for p in pattern_list:
+        pattern_number_dict[p] = {
+            'fileNum': 0,
+            'ecsNum': 0,
+        }
+
+    for t in tree_map_uuid:
+        pattern_number_dict[pattern_dict[t['uuid']]['pattern']]['ecsNum'] += 1
+        pattern_number_dict[pattern_dict[t['uuid']]['pattern']]['fileNum'] += t['file_num']
+
+    # 做拓扑可视化图谱的数据
+    topu_map = []
+    for t in tree_map_uuid:
+        topu_map.append({
+            'ECS_ID': t['uuid'],
+            'AS_ID': pattern_dict[t['uuid']]['AS_ID'],
+            'VPC_ID': pattern_dict[t['uuid']]['VPC_ID'],
+            'Region_ID': pattern_dict[t['uuid']]['Region_ID'],
+            'file_num': t['file_num']
+        })
+
+    region_list = []
+
+    for d in topu_map:
+        has_region = False
+        before_region = {}
+        for region in region_list:
+            if d['Region_ID'] == region['ID']:
+                has_region = True
+                before_region = region
+        if has_region:
+            has_vpc = False
+            before_vpc = {}
+            for vpc in before_region['children']:
+                if d['VPC_ID'] == vpc['ID']:
+                    has_vpc = True
+                    before_vpc = vpc
+
+            if has_vpc:
+                has_az = False
+                before_az = {}
+                for az in before_vpc['children']:
+                    if d['AS_ID'] == az['ID']:
+                        has_az = True
+                        before_az = az
+                if has_az:
+                    before_az['children'].append({
+                        'ID': d['ECS_ID'],
+                        'file_num': d['file_num']
+                    })
+                else:
+                    before_vpc['children'].append({
+                        'ID': d['AS_ID'],
+                        'children': []
+                    })
+
+                    az = before_vpc['children'][len(before_vpc['children']) - 1]
+                    az['children'].append({
+                        'ID': d['ECS_ID'],
+                        'file_num': d['file_num']
+                    })
+            else:
+                before_region['children'].append({
+                    'ID': d['VPC_ID'],
+                    'children': []
+                })
+
+                vpc = before_region['children'][len(before_region['children']) - 1]
+                vpc['children'].append({
+                    'ID': d['AS_ID'],
+                    'children': []
+                })
+
+                az = vpc['children'][len(vpc['children']) - 1]
+                az['children'].append({
+                    'ID': d['ECS_ID'],
+                    'file_num': d['file_num']
+                })
+
+        else:
+            region_list.append({
+                'ID': d['Region_ID'],
+                'children': [],
+            })
+            region = region_list[len(region_list) - 1]
+            region['children'].append({
+                'ID': d['VPC_ID'],
+                'children': [],
+            })
+
+            vpc = region['children'][len(region['children']) - 1]
+            vpc['children'].append({
+                'ID': d['AS_ID'],
+                'children': [],
+            })
+
+            az = vpc['children'][len(vpc['children']) - 1]
+            az['children'].append({
+                'ID': d['ECS_ID'],
+                'file_num': d['file_num']
+            })
+
+    Data = {
+        'treeMap': {
+            'name': 'all',
+            'children': []
+        },
+        'topologicalMap': []
+    }
+    # 处理为接口格式
+    for pkey in pattern_number_dict:
+        Data['treeMap']['children'].append({
+            'patternName': pkey,
+            'fileNum': pattern_number_dict[pkey]['fileNum'],
+            'ecsNum': pattern_number_dict[pkey]['ecsNum'],
+        })
+
+    Data['topologicalMap'] = region_list
+    return HttpResponse(json.dumps(Data), content_type='application/json')
 
 
 # 这个可以改为静态的了
@@ -215,7 +560,6 @@ def get_ecs_force(request):
         where_str = ''
     cursor = connection.cursor()
 
-    print(where_str)
     cursor.execute(
         "select uuid AS ESC_ID, AS_ID, VPC_ID, Region_ID, "
         "count(malware_type) AS malwareNumber, "

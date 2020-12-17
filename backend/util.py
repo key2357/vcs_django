@@ -134,6 +134,23 @@ def get_vpc_score(score_info, alpha, beta, theta, gamma, max_info):
     return alpha * score_info[0] / max_info[0] + beta * score_info[1] / max_info[1] + theta * score_info[
         2] / max_info[2] + gamma * score_info[3] / max_info[3]
 
+
+def get_time_str_by_time_type(time_type):
+    begin_time_str = ''
+    end_time_str = ''
+    if time_type == '':
+        begin_time_str, end_time_str = get_time_str(0, 1)
+    elif time_type == '7d':
+        begin_time_str = '2020-10-27 00-00-00'
+        end_time_str = '2020-11-03 00-00-00'
+    elif time_type == '1m':
+        begin_time_str = '2020-10-03 00-00-00'
+        end_time_str = '2020-11-03 00-00-00'
+    else:
+        begin_time_str = '2019-11-03 00-00-00'
+        end_time_str = '2020-11-03 00-00-00'
+    return begin_time_str, end_time_str
+
 # def change_file(file):
 #     if file['categories'] == '' and file['subtype'] == '':
 #         return  file
