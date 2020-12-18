@@ -1,7 +1,7 @@
 from django.http import HttpResponse
 from django.db import connection
 from backend.util import get_file_where_str, get_file_and_time_where_str, get_time_str, get_time_where_str, \
-    get_slice_where_str, get_timestamp, has_filter_func, get_vpc_score_info, get_vpc_score, get_time_str_by_time_type
+    get_slice_where_str, get_timestamp, has_filter_func, get_vpc_score_info, get_vpc_score, get_time_str_by_time_type, generate_opcode_csv, generate_opcode_tree
 from vcs_django.settings import BASE_DIR
 from backend.config import MALWARE_SUBTYPE, FINAL_TIME, INIT_TIME
 import pandas as pd
@@ -16,77 +16,35 @@ import networkx as nx
 # import matplotlib.pyplot as plt
 # 13903 373668
 def test(request):
-    ddd = """{"value": [[0, "source_string", "eval(gzinflate(base64_decode('FZfFDuzGFkU/J4k8MLZBUQZmZvbkyYxt5q9/fcetUltV5+y9Vnmmw9/1247VkO7l31m6lTj2v6LMp6L8+y8uKYRtc9KtdiMIABJmkl1kzctWGZL+jW8dOWEQx+tAGT4W96rqjQJLRiHLlEGqBSrQivJQRQaJh0UfDwT5RDERs6CtaKoihvExXR1JCq7AdpfILrXj82CgV3r1DvjOwHeMK2afLZLrMA7QIlwooR1SW1aO8HmIl0mImzsErCekwZNJ3PY0BwXsNYqi6vM+bGeTyl2DpZsLehK0C9pcQS/baKmrqR1v5fwmbcIjuUKZlXmLyzDxADMTkDYCvOjy8GttJCQwHq9kptC01pURlNIFIuhSHISTOnTfz+cO57ynOMffvoDT0UqDTKx15GBz53TkDcvZztLktXoEK0uxg7u5Q+/XYNJQCav4CbY+xcfqUqNgZPqt4RNX8inCFLZic2F0a5hd5lGOkuOTZgXMcOSQcwiRYtNGLQyWp1D08p3d0tl0eY8Y4e1tFE2vWfL0+mYjhacrfBRyZGZzkuRkujmPGkAhspak0D6KdpD9N67BjPsW6eCDDLV7Tj37x6nYzN7PJkwPVeahjaUQu6QZBSIgUuy1YaeNp+yzXJBxDJXKJYmkcJZ/6sxHRagI2OzywmSG2Vc8GHVVw2/TGOnNKy0kaAyqGxcCTNrAIF8lmgfnCLecWNVKRuxKSTfUveBIQ8GFOnl1Z1yjdK2nVG6qKdWKoXXv7qRuIqz3cjP5A5CHKa/QguGZzgszfvLlJ4Jh8vMNcY0HvYnJ573IiEUgCdLR6cA6JP+j0iLACHs3IDfscBDMhW1XdvzUQW6bl4cqqHTOLr7hhRqYqSiq0uMjU6CNF0rqeM/NsKaiH0R2xzYuZVhhBxUusIdHZ6jAqi+YnFKv2z37HaxgzvZBbBDXskFUDGVn8GXP8C45PPnEJin1wEKISj1MjrRFpa9WWB8JR8suATL3o6QtHIm/jxxuyz+78dbcuFJesqZs5Cr2IZsolf44PVY/wRcYcTktH+7TylwmS3QI3LMdt2KPO0q1JAxvYdOH3V2k0I8oWWnOwKKeCoMuz521LRWKo3t2rGPrHfgxWftgGZJ3+Ggl6NMbdg9BEI7iK/aEFik8kS1MU5Hcye+f9OE4pbP3ovmzOCudn4CIoFNJht1RoEez4pozyEPbMeCOEW70XW/7UtQ6Xw9lMm0qqajgjtdYVvJ7JSdhHDA0V4dl4NPaKSnubSR6zuR+KQTKK5BVWS+KbG0/yx9ZgkSbUqUThoLRubiY7He6O1gKZgPmvhc0M3aC0NkohoUdKsT1QrXyu3cQLu3bPpGM+gsnD9GGjvdx6PJGO84zJWreL4B9N/7aZhZDSAcgyexzq8UorpH9pRpCtxGZu/vybF2uCkKYX9U06a+HCugjParT3LfPhB26HGFioryqo0z3s9ezLdZx4l+Evi7hHcOzUNsfES3Ub0kGWZsHcMeTA1hsw+XVTdN8kCHEDSWKlhpV3001eh8Lq15EMm86Z7F85LVyz3bxQOftO3XjrQy85PXaBbA4Zh7xh9+eDy/3bLaWRNVjiroZkAcVCjgk2eK0llSa7rDlSdaKunfUXxLwFu4w1W7OJBCwmdrLvcAyfnJkYMgZMHlW4vvet+Fn4oPZYu+jUTH+Re3sAzSlm0xZLMrrtgDfoIZZ85sfI+qrmsihouibKwzM54IpJtMCotuFAwcnqhrS1QI4EHG+H2x0RunhTkRb1a156vX3GUBUeUTnu1OKHI0wNmwxXzZ6UnLtsDSUJYqTq4m1r1ZiHTXt4Ld1xhY9fYx2kSc4AZf50/t76UrWbHJOh37MJsQTJyFNbtgsqE0q3OrVKA9MJkvvptZPRZyc07WOkVbydDgdIUZAVLa4pISOIfqGzCd6YpzCJmPJhlQ+xr3GLZqUTk8/v1NVtQfVLHJq/UbVHj5KpoRcyTOK25OzoAgJ05aezt9NTNzI6u9JLtgm9FIBI65aIPYYi0jWEYbstAYOHgf1+pHMIbOk3eoRS/bQbgxNx9tLDd16ESZJmxWcYuZ4PHJyVjgnxTlQSS/j1hCrz6lVF/4kH4Q63/hax7g7s5Eo6azjOoGU6bXNbBt/jZb7UBptXIvFjKT1Oni5dB4Q92XWFmZY0U0lqLb1/NJtab8qyyaJqUM0RPJo7kRrf9G0UF0WokMVlHVKokXl/OwSLn72s0e7fvyVmgL4CM3X33PRPmr8PsXgOL9xod1m5Th2r+3Fz781IFHE9GhoNbes2U9rHbkDBSj6NbuZUmxfo3nanPCyADG1gkzXKxAweiIr3c3FX66UT/2aLG8WGrEzoPoh9C1OsiIWTlp4T8tht4eTM/QYNl4wIr/EwQI142WhBr+W8PNbrFvhtRG0zd/ApAQhoUqBYtv69u3kq1hPFyefowMGdO4FWV3vut0C8EguavQlEWJEj4A9JHqO/CpCVV7YBpVUFt2jQq/BXGSGLDfCff0SntJX2jkGUSQvSYqRbPhr0+PZzS3wkR+OkW+qaJ9aX0UuELLkJS7Fnz6JyXZQ7jc7u4N9XOAJbmCk+Rpyj0zGGHKnQ8YN9HCD3h/O9YaoJ0Bk0j4gOZX75GHtEOCbZGQzWIYWy83cuqEF44m+jYXimufKdSuZMBVRV2BeEDbeM8zPL/UGEX+Kr8+23OpPddbHx8s4Aq4lTbRgamMLLYgGj4mmvMnP+AcMsS8I5eQnKc/k4HosjT4w+FHVSu/kXLdjQm6/mfl53FXh7vl5FXW1Dcpy60LFC0AziYSbsFbVq17VpxXQn4inCDxL5M1pV6bLUli2CE7MxI/B8LCMao6CxjXBbMhggVes5UkJPHPCuvelt/O7ctjy7U3cTW87ulJVNUsfI46WZe44XjQ9Gs0X2oDmAcP87P16bJ/T9GiA9wRO+KWm2XDMOLLqh8uuM4zENta2OCcbdv7waLIVluwwh4IvrueK7FYpT8tE5+Oycplmkrk1AhPMrxnoN5j6OqS5Yu+7l6D44M0IeluWSuAkSYYNdr07sO3bEvq1csrnEMEh9G6QgKOcer9Zusq0LnCB0fGYX2+w8nRir4SqN42ACMui8nbQB1clWvS+5ZWxBxVvwjqqxURo3EmfNN1tp3nz96usgkkqIWZbjovwyzD2O1Pryikmv02QVTI3YigFym3Cd16orzwZRWnePpg3OXtPZSpZNcIPxp/A477iNtbHnZDVIaCOwmEviMJTW62dbmgRLIGRVIkJSJkBzrD6V3LXjHtIamOv32EY4asLSvbsBt12TnKV1Y+WIPwhdQe3m1Q5C0u/uHzgwuV+/kRsDdXxszAFxrJ4OA+BQf+e1/K/IqOrBqufJE/KIMPBFezubC6cSoqH09S0Ft+4HG9s07D49hf7tt/+SFbwlU9iBI4bD4KE8RHFwyXYLQu4SkO2fB+2h2htCSd4D/gyEeXrF/8+uP8SnGduzlcSKF4iQsg3/9UjKhXCcXh0+z0QNHErw+BZZ1PkwWHh364pigSGiuR7fLbcDPhlVZ0nfNOLCPfMXjCDkt/B9QH1vFDCQvyWmUnlr0GXQj7jyTjaEufDEGrgoQDvIhGNCAV/LeOyU98fw9zRVPyTpQQP19p8Y+neGuOQ85J6yFh64XARs9LaLnjKZo41Fkn0YBxFhHWGKxBKA2O4NbSbOGAa6i3K2dhxvWmwq8lvPu/hBhdpIeDWkbyPcJYRo4kHISMa5ZvjQ9ypyh4JEKvab5j254vw/LAN4AsRf1j6DC4FszBKc4h+pESmeeLKS6Oos0P43Qz06x6si11UN1DUKEiYZA/YiHhBoukbXgPFMN22cjBtn/fKaohEBrUTM1bPFrbREeZqKcB00LIf7uF/ZTSz2vToRafupNH+bgSKCSCQz5nijCpbaBFWH1aq3RFUlpuWXHONc+r29AUTi1Fmw7PpB16bQ2CO1Q3MKz09pTQRrZ1juRtc4wdvT/D6qcTO9ovqge1q9grdIh1v6ZTQ8u9+/EgtiWVtYpi4+QLvuhvD4FeVcE1P5bU2xyiX95M5rxIiPiFP+DlV4uXtM0YtY367K8n6K3"]]}"""
-    print(len(ddd))
-    # cursor.execute("select uuid, file_md5, `name`, `caller`, argc, argv, `return`, `index`, dynamic "
-    #                "from malware_op_code where uuid = '{0}' and file_md5 = '{1}' and `name` = '{2}' and `index` = '1867'".format(
-    #     'd50bcde781a14ae1db088cebad732476', 'd5e9ad5b40d06e2c5208b6e20ca7b809', 'strlen'))
-    # desc = cursor.description
-    # all_data = cursor.fetchall()
-    # ecs_force_and_file = [dict(zip([col[0] for col in desc], row)) for row in all_data]
-    # print(ecs_force_and_file)
-    # name = ['uuid', 'file_md5', 'name', 'caller', 'argc', 'argv', 'return', 'index', 'dynamic']
-    # test = pd.DataFrame(columns=name, data=ecs_force_and_file)
-    # test.to_csv('./file_opcode_with_dynamic_11869.csv', index=0)
-
-    # 11869
-    # # 测试一个uuid-md5
-    # cursor = connection.cursor()
-    # cursor.execute("select `name` from malware_op_code where name like '%zend%'")
-    # desc = cursor.description
-    # all_data = cursor.fetchall()
-    # ecs_force_and_file = [dict(zip([col[0] for col in desc], row)) for row in all_data]
-    # ecs_force_and_file_set = set()
-    # for e in ecs_force_and_file:
-    #     ecs_force_and_file_set.add(e['name'])
-
-    # print('name like "zend":', ecs_force_and_file_set)
-    # cursor = connection.cursor()
-    # cursor.execute("select caller from malware_op_code where caller like '%zend%'")
-    # desc = cursor.description
-    # all_data = cursor.fetchall()
-    # ecs_force_and_file = [dict(zip([col[0] for col in desc], row)) for row in all_data]
-    # ecs_force_and_file_set = set()
-    # for e in ecs_force_and_file:
-    #     ecs_force_and_file_set.add(e['caller'])
-    # print('caller like "zend":', ecs_force_and_file_set)
-
-    # something = ['', '[0]', '[0, 0]', '[0, 0, 0]', '[0, 0, 0, 0]', '[0, 0, 0, 0, 0]', '[0, 0, 0, 0, 0, 0]', '[0, 0, 0, 0, 0, 0, 0]', '[0, 0, 0, 0, 0, 0, 0, 0]', '[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]']
-    # another = ['']
-    # uuid_md5_set = set()
-    # for e in ecs_force_and_file:
-    #     if e['dynamic'] not in another:
-    #         str_key = e['uuid'] + e['file_md5']
-    #         uuid_md5_set.add(str_key)
-    #
-    # print(len(uuid_md5_set))
-
-    # for e in ecs_force_and_file:
-    #     print(e["index"])
-
-    # name = ['uuid', 'file_md5', 'index']
-    # test = pd.DataFrame(columns=name, data=ecs_force_and_file)
-    # test.to_csv('./example.csv')
+    cursor = connection.cursor()
+    cursor.execute("select uuid, file_md5, `name`, `caller`, argc, argv, `return`, `index`, dynamic "
+                   "from malware_op_code_text")
+    desc = cursor.description
+    all_data = cursor.fetchall()
+    ecs_force_and_file = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+    for e in ecs_force_and_file:
+        if len(e['file_md5']) > 50:
+            print(e['uuid'], '|', e['file_md5'])
 
     data = {}
     return HttpResponse(json.dumps(data), content_type='application/json')
 
 
 def get_time_line_chart(request):
-    params = json.loads(request.body)
-    file_filter = params['filter']
-    line_type = params['type']
-    time_type = params['time']
+    # params = json.loads(request.body)
+    # file_filter = params['filter']
+    # line_type = params['type']
+    # time_type = params['time']
 
     # 文件过滤为空的逻辑，以确定where_str
-    # file_filter = {
-    #     'malwareType': ['网站后门', '恶意进程'],
-    #     'malwareSubtype': ['WEBSHELL', '木马程序'],
-    #     'fileType': ['WEBSHELL', 'BIN']
-    # }
-    #
-    # line_type = 'MalwareSubType'
-    # time_type = '7 days'
+    file_filter = {
+        'malwareType': ['网站后门', '恶意进程'],
+        'malwareSubtype': ['WEBSHELL', '木马程序'],
+        'fileType': ['WEBSHELL', 'BIN']
+    }
+
+    line_type = 'malwareType'
+    time_type = '7 days'
 
     has_filter = has_filter_func(file_filter)
 
@@ -400,98 +358,178 @@ def get_space_tree_map(request):
     return HttpResponse(json.dumps(Data), content_type='application/json')
 
 
+# UI-v2 view1 时空概览之4个模式
+def get_overview_pattern(request):
+    # params = json.loads(request.body)
+    # time_slice = params['slice']
+    # file_filter = params['fileFilter']
+
+    time_slice = {
+        'beginTime': 0.58,
+        'endTime': 0.6
+    }
+
+    file_filter = {
+        'malwareType': ['网站后门', '恶意进程'],
+        'malwareSubtype': ['WEBSHELL', '挖矿程序'],
+        'fileType': ['BIN', 'WEBSHELL']
+    }
+
+    has_filter = has_filter_func(file_filter)
+
+    cursor = connection.cursor()
+    cursor.execute("select ECS_ID, AS_ID, VPC_ID, Region_ID, pattern from user_netstate_info ")
+    desc = cursor.description
+    all_data = cursor.fetchall()
+    uuid_and_pattern = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+
+    uuid_pattern_dict = {}
+    for u in uuid_and_pattern:
+        uuid_pattern_dict[u['ECS_ID']] = {
+            'ECS_ID': u['ECS_ID'],
+            'AS_ID': u['AS_ID'],
+            'VPC_ID': u['VPC_ID'],
+            'Region_ID': u['Region_ID'],
+            'pattern': u['pattern']
+        }
+
+    Data = {
+        'name': 'all',
+        'children': []
+    }
+
+    time_slice_num = 7
+    for time_index in range(time_slice_num):
+        begin_time_number = time_slice['beginTime'] + (time_slice['endTime'] - time_slice['beginTime']) * (
+                    time_index / time_slice_num)
+        end_time_number = time_slice['beginTime'] + (time_slice['endTime'] - time_slice['beginTime']) * (
+                    (time_index + 1) / time_slice_num)
+        # 时间片或文件过滤为空的逻辑，以确定where_str
+        if has_filter and time_slice:
+            begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
+            malware_type_list = file_filter['malwareType']
+            malware_subtype_list = file_filter['malwareSubtype']
+            malware_filetype_list = file_filter['fileType']
+            where_str = get_file_and_time_where_str(malware_type_list, malware_subtype_list, malware_filetype_list,
+                                                    begin_time_str, end_time_str)
+        elif has_filter:
+            begin_time_number = 0
+            end_time_number = 1
+            begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
+            malware_type_list = file_filter['malwareType']
+            malware_subtype_list = file_filter['malwareSubtype']
+            malware_filetype_list = file_filter['fileType']
+            where_str = get_file_and_time_where_str(malware_type_list, malware_subtype_list, malware_filetype_list,
+                                                    begin_time_str, end_time_str)
+        elif time_slice:
+            begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
+            where_str = get_time_where_str(begin_time_str, end_time_str)
+        else:
+            begin_time_number = 0
+            end_time_number = 0
+            begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
+            where_str = ''
+
+        # overview pattern
+        cursor = connection.cursor()
+        cursor.execute(
+            "select uuid, count(malware_type) AS malwareNumber, "
+            "sum(case when malware_type='WEBSHELL'then 1 else 0 end) as WEBSHELL, "
+            "sum(case when malware_type='DDOS木马' then 1 else 0 end) as DDOS木马,"
+            "sum(case when malware_type='被污染的基础软件' then 1 else 0 end) as 被污染的基础软件,"
+            "sum(case when malware_type='恶意程序' then 1 else 0 end) as 恶意程序,"
+            "sum(case when malware_type='恶意脚本文件' then 1 else 0 end) as 恶意脚本文件,"
+            "sum(case when malware_type='感染型病毒' then 1 else 0 end) as 感染型病毒,"
+            "sum(case when malware_type='黑客工具' then 1 else 0 end) as 黑客工具,"
+            "sum(case when malware_type='后门程序' then 1 else 0 end) as 后门程序,"
+            "sum(case when malware_type='勒索病毒' then 1 else 0 end) as 勒索病毒,"
+            "sum(case when malware_type='漏洞利用程序' then 1 else 0 end) as 漏洞利用程序,"
+            "sum(case when malware_type='木马程序' then 1 else 0 end) as 木马程序,"
+            "sum(case when malware_type='蠕虫病毒' then 1 else 0 end) as 蠕虫病毒,"
+            "sum(case when malware_type='挖矿程序' then 1 else 0 end) as 挖矿程序,"
+            "sum(case when malware_type='自变异木马' then 1 else 0 end) as 自变异木马 "
+            "from malware_base_info " + where_str + " group by uuid")
+        desc = cursor.description
+        all_data = cursor.fetchall()
+        overview_pattern = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+
+        time_data = {
+            'time_T': 'T' + str(time_index),
+            'start_time': begin_time_str,
+            'end_time': end_time_str,
+            'children': []
+        }
+
+        for o in overview_pattern:
+            ecs_pattern_info = uuid_pattern_dict[o['uuid']]
+            has_region = False
+            ecs_in_region = {}
+            for region in time_data['children']:
+                if region['ID'] == ecs_pattern_info['Region_ID']:
+                    has_region = True
+                    ecs_in_region = region
+            if not has_region:
+                time_data['children'].append({
+                    'ID': ecs_pattern_info['Region_ID'],
+                    'file_num': 0,
+                    'malware_file_info': [],
+                    'children': []
+                })
+
+                ecs_in_region = time_data['children'][len(time_data['children']) - 1]
+
+                if file_filter['malwareSubtype']:
+                    for ms in file_filter['malwareSubtype']:
+                        ecs_in_region['malware_file_info'].append({
+                            'name': ms,
+                            'file_num': 0
+                        })
+                else:
+                    for ms in MALWARE_SUBTYPE:
+                        ecs_in_region['malware_file_info'].append({
+                            'name': ms,
+                            'file_num': 0
+                        })
+
+                pattern_list = ['multi-az', 'flower', 'chain', 'only-ecs']
+                for ptl in pattern_list:
+                    ecs_in_region['children'].append({
+                        'name': ptl,
+                        'file_num': 0,
+                        'ecs_num': 0
+                    })
+
+            # 文件总数
+            ecs_in_region['file_num'] += o['malwareNumber']
+
+            # 文件子类型
+            for mfi in ecs_in_region['malware_file_info']:
+                mfi['file_num'] += int(o[mfi['name']])
+
+            # 模式
+            for pn in ecs_in_region['children']:
+                if pn['name'] == ecs_pattern_info['pattern']:
+                    pn['file_num'] += int(o['malwareNumber'])
+                    pn['ecs_num'] += 1
+
+        Data['children'].append(time_data)
+    return HttpResponse(json.dumps(Data), content_type='application/json')
+
+
 # opcode 中的层次树
 def get_opcode_tree_map(request):
     # params = json.loads(request.body)
     # params_uuid = params['uuid']
     # params_file_md5 = params['file_md5']
+
     params_uuid = '2786278ac90e43cac6fa717884c5a140'
     params_file_md5 = '00b0dfc7f918e5114e083f501ffbcdf3'
 
-    cursor = connection.cursor()
-    cursor.execute("select uuid, file_md5, `name`, `caller`, argc, argv, `return`, `index`, dynamic "
-                   "from malware_op_code where uuid = '{0}' and file_md5 = '{1}'".format(params_uuid, params_file_md5))
-    desc = cursor.description
-    all_data = cursor.fetchall()
-    ecs_filemd5_opcode = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+    opcode_csv = generate_opcode_csv(params_uuid, params_file_md5)
+    print(opcode_csv)
+    opcode_tree = generate_opcode_tree(opcode_csv)
 
-    edge_dict = {}
-    for e in ecs_filemd5_opcode:
-        str_key = e['name'] + e['caller'] + e['argc']
-
-        dynamic = e['dynamic']
-        dynamic_array = dynamic[1:len(dynamic) - 1].split(',')
-        dynamic_handle = []
-        dynamic_index = []
-        argc = int(e['argc'])
-
-        if str_key not in edge_dict:
-            all_index = []
-            all_index.append(e['index'])
-            for d in dynamic_array:
-                if d == '':
-                    d = 0
-                dynamic_handle.append(int(d))
-                if int(d) != 0:
-                    dynamic_index.append([int(e['index'])])
-                else:
-                    dynamic_index.append([])
-
-            if int(argc) > len(dynamic_array):
-                for i in range(int(argc - len(dynamic_array))):
-                    dynamic_handle.append(0)
-                    dynamic_index.append([])
-
-            edge_dict[str_key] = {
-                'uuid': e['uuid'],
-                'file_md5': e['file_md5'],
-                'name': e['name'],
-                'caller': e['caller'],
-                'argc': e['argc'],
-                'argv': e['argv'],
-                'return': e['return'],
-                'index': int(e['index']),
-                'dynamic': dynamic_handle,
-                'call_num': 1,
-                'dynamic_index': dynamic_index,
-                'all_index': all_index,
-                'df': 0,
-            }
-
-        else:
-            # 比较
-            for d in dynamic_array:
-                if d == '':
-                    d = 0
-                dynamic_handle.append(int(d))
-
-            if int(argc) > len(dynamic_array):
-                for i in range(int(argc - len(dynamic_array))):
-                    dynamic_handle.append(0)
-
-            old_dynamic = edge_dict[str_key]['dynamic']
-
-            if e['index'] not in edge_dict[str_key]['all_index']:
-                edge_dict[str_key]['all_index'].append(e['index'])
-
-            for i in range(len(dynamic_handle)):
-                if old_dynamic[i] == 0 and dynamic_handle[i] > 0:
-                    edge_dict[str_key]['df'] = 1
-                    edge_dict[str_key]['dynamic_index'][i].append(int(e['index']))
-                    edge_dict[str_key]['dynamic'][i] = dynamic_handle[i]
-                elif old_dynamic[i] > 0 and dynamic_handle[i] == 0:
-                    edge_dict[str_key]['df'] = 1
-
-            edge_dict[str_key]['call_num'] += 1
-            if int(e['index']) < int(edge_dict[str_key]['index']):
-                edge_dict[str_key]['index'] = int(e['index'])
-
-    result_data = []
-    for ekey in edge_dict:
-        result_data.append(edge_dict[ekey])
-
-    result_data = sorted(result_data, key=lambda x: x['index'])
-    return 'ok'
+    return HttpResponse(json.dumps(opcode_tree), content_type='application/json')
 
 
 # 这个可以改为静态的了

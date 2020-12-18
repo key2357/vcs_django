@@ -1,4 +1,5 @@
 from backend.config import INIT_TIME, FINAL_TIME
+from django.db import connection
 import datetime
 import numpy as np
 
@@ -150,6 +151,278 @@ def get_time_str_by_time_type(time_type):
     else:
         begin_time_str, end_time_str = get_time_str(0, 1)
     return begin_time_str, end_time_str
+
+
+# 生成opcode_example csv格式  依赖读取opcode_example_result
+def generate_opcode_csv(uuid, file_md5):
+    # 加一个字段order
+    cursor = connection.cursor()
+    cursor.execute("select uuid, file_md5, `name`, `caller`, argc, argv, `return`, `index`, dynamic "
+                   "from malware_op_code_text where file_md5 = '{1}' and uuid = '{0}' ".format(uuid, file_md5))
+    desc = cursor.description
+    all_data = cursor.fetchall()
+    ecs_force_and_file = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+    edge_dict = {}
+    for e in ecs_force_and_file:
+        str_key = e['name'] + e['caller'] + e['argc']
+
+        dynamic = e['dynamic']
+        dynamic_array = dynamic[1:len(dynamic) - 1].split(',')
+        dynamic_handle = []
+        dynamic_index = []
+        argc = int(e['argc'])
+
+        if str_key not in edge_dict:
+            all_index = []
+            all_index.append(e['index'])
+            for d in dynamic_array:
+                if d == '':
+                    d = 0
+                dynamic_handle.append(int(d))
+                if int(d) != 0:
+                    dynamic_index.append([int(e['index'])])
+                else:
+                    dynamic_index.append([])
+
+            if int(argc) > len(dynamic_array):
+                for i in range(int(argc - len(dynamic_array))):
+                    dynamic_handle.append(0)
+                    dynamic_index.append([])
+
+            edge_dict[str_key] = {
+                'uuid': e['uuid'],
+                'file_md5': e['file_md5'],
+                'name': e['name'],
+                'caller': e['caller'],
+                'argc': e['argc'],
+                'argv': e['argv'],
+                'return': e['return'],
+                'index': int(e['index']),
+                'dynamic': dynamic_handle,
+                'call_num': 1,
+                'dynamic_index': dynamic_index,
+                'all_index': all_index,
+                'df': 0,
+            }
+
+        else:
+            # 比较
+            for d in dynamic_array:
+                if d == '':
+                    d = 0
+                dynamic_handle.append(int(d))
+
+            if int(argc) > len(dynamic_array):
+                for i in range(int(argc - len(dynamic_array))):
+                    dynamic_handle.append(0)
+
+            old_dynamic = edge_dict[str_key]['dynamic']
+
+            if e['index'] not in edge_dict[str_key]['all_index']:
+                edge_dict[str_key]['all_index'].append(e['index'])
+
+            for i in range(len(dynamic_handle)):
+                if old_dynamic[i] == 0 and dynamic_handle[i] > 0:
+                    edge_dict[str_key]['df'] = 1
+                    edge_dict[str_key]['dynamic_index'][i].append(int(e['index']))
+                    edge_dict[str_key]['dynamic'][i] = dynamic_handle[i]
+                elif old_dynamic[i] > 0 and dynamic_handle[i] == 0:
+                    edge_dict[str_key]['df'] = 1
+
+            edge_dict[str_key]['call_num'] += 1
+            if int(e['index']) < int(edge_dict[str_key]['index']):
+                edge_dict[str_key]['index'] = int(e['index'])
+
+    result_data = []
+    for ekey in edge_dict:
+        result_data.append(edge_dict[ekey])
+
+    result_data = sorted(result_data, key=lambda x: x['index'])
+
+    return result_data
+
+
+# 生成tree.json 的迭代函数
+def ge_tree(fr_now_node, fr_iteration, parent, file_uuid_md5_info):
+    if fr_iteration:
+        for frkey in fr_iteration:
+            if parent == '':
+                fr_now_node.append({
+                    'name': frkey,
+                })
+            else:
+                fr_key_array = frkey.split('|')
+                if len(fr_key_array) > 1:
+                    frkey = fr_key_array[0]
+                str_key = frkey + '|' + parent
+                fr_now_node.append({
+                    'uuid': file_uuid_md5_info[str_key]['uuid'],
+                    'file_md5': file_uuid_md5_info[str_key]['file_md5'],
+                    'name': frkey,
+                    'caller': file_uuid_md5_info[str_key]['caller'],
+                    'argc': file_uuid_md5_info[str_key]['argc'],
+                    # 'argv': file_uuid_md5_info[str_key]['argv'],
+                    # 'return': file_uuid_md5_info[str_key]['return'],
+                    'index': file_uuid_md5_info[str_key]['index'],
+                    'dynamic': file_uuid_md5_info[str_key]['dynamic'],
+                    'call_num': file_uuid_md5_info[str_key]['call_num'],
+                    'dynamic_index': file_uuid_md5_info[str_key]['dynamic_index'],
+                    'all_index': file_uuid_md5_info[str_key]['all_index'],
+                    'df': file_uuid_md5_info[str_key]['df']
+                })
+
+            if frkey in fr_iteration:
+                if fr_iteration[frkey]:
+                    fr_now_node[len(fr_now_node) - 1]['children'] = []
+                    const_fr_now_node = fr_now_node[len(fr_now_node) - 1]['children']
+                    const_fr_iteration = fr_iteration[frkey]
+                    const_parent = frkey
+                    ge_tree(const_fr_now_node, const_fr_iteration, const_parent, file_uuid_md5_info)
+
+    return fr_now_node, fr_iteration
+
+
+# 生成tree.json 依赖 opcode_example csv格式
+def generate_opcode_tree(opcode_csv):
+    # 迭代读取csv格式的opcode_example
+    data_color = []
+    for o in opcode_csv:
+        data_color.append([o['name'], o['caller']])
+
+    # edge_set 保存原始边信息
+    edge_set = set()
+    for i in range(len(data_color)):
+        edge_set.add((data_color[i][0], data_color[i][1]))
+
+    # u_set 已添加的点
+    u_set = set()
+    # 初始化u集
+    u_set.add('__main__')
+    # e_set_dict保存以边作为key，order作value
+    e_set_dict = {}
+
+    # 先以a为起点 一层一层广度遍历
+    old_order = set()
+    order_width = 0  # 保存order最大宽度
+    for e in edge_set:
+        str_key = e[1] + '|' + e[0]
+        if e[1] == '__main__':
+            old_order.add(e[0])
+            e_set_dict[str_key] = 0
+
+    if len(old_order) > order_width:
+        order_width = len(old_order)
+
+    count = 1
+    is_continue = True
+    while is_continue:
+        before_len = len(e_set_dict)
+        new_order = set()
+        for e in edge_set:
+            str_key = e[1] + '|' + e[0]
+            if str_key not in e_set_dict and e[1] in old_order:
+                new_order.add(e[0])
+                e_set_dict[str_key] = count
+        after_len = len(e_set_dict)
+        if before_len == after_len:
+            is_continue = False
+            e_set_dict['order_deep'] = count
+        old_order = new_order
+        if len(old_order) > order_width:
+            order_width = len(old_order)
+        count += 1
+
+    result_tree = {
+        '__main__': {},
+    }
+
+    # 生成树，核心算法，递归实现
+    for i in range(e_set_dict['order_deep']):
+        now_nodes = set()
+        for ekey in e_set_dict:
+            if e_set_dict[ekey] == i:
+                key_array = ekey.split('|')
+                caller = key_array[0]
+                name = key_array[1]
+
+                if name not in now_nodes:
+                    now_nodes.add(name)
+                else:
+                    name = name + '|' + 'df'
+                    now_nodes.add(name)
+
+                # 回溯
+                deep_now = e_set_dict[ekey]
+                trap = [name, caller]
+
+                while caller != '__main__':
+                    deep_now -= 1
+                    for eekey in e_set_dict:
+                        if eekey != 'order_deep':
+                            key_array = eekey.split('|')
+                            e_caller = key_array[0]
+                            e_name = key_array[1]
+
+                            if e_name == caller and e_set_dict[eekey] == deep_now:
+                                caller = e_caller
+                                trap.append(caller)
+                                break
+
+                # 不确定父节点，直接上
+                parent_oo = result_tree
+                for ii in range(len(trap) - 1, -1, -1):
+                    if trap[ii] not in parent_oo:
+                        parent_oo[trap[ii]] = {}
+                    else:
+                        parent_oo = parent_oo[trap[ii]]
+
+    # 读取信息 转变为接口格式
+    data_color = []
+    for r in opcode_csv:
+        data_color.append([r['uuid'], r['file_md5'], r['name'], r['caller'], r['argc'], str(r['argv']), str(r['return']), r['index'], str(r['dynamic']), r['call_num'], str(r['dynamic_index']), str(r['all_index']), r['df']])
+    data_color_dict = {}
+
+    # 计算污点类型和污点数量
+    dynamic_type = 0
+    dynamic_type_set = set()
+    dynamic_num = 0
+    for i in range(len(data_color)):
+        dynamic_array = data_color[i][8][1:len(data_color[i][8]) - 1].split(',')
+        for dy in dynamic_array:
+            if int(dy) != 0:
+                if int(dy) not in dynamic_type_set:
+                    dynamic_type += 1
+                    dynamic_type_set.add(int(dy))
+                dynamic_num += 1
+        str_key = data_color[i][2] + '|' + data_color[i][3]
+        data_color_dict[str_key] = {
+            'uuid': data_color[i][0],
+            'file_md5': data_color[i][1],
+            'name': data_color[i][2],
+            'caller': data_color[i][3],
+            'argc': data_color[i][4],
+            # 'argv': data_color[i][5],
+            # 'return': data_color[i][6],
+            'index': data_color[i][7],
+            'dynamic': data_color[i][8],
+            'call_num': data_color[i][9],
+            'dynamic_index': data_color[i][10],
+            'all_index': data_color[i][11],
+            'df': data_color[i][12]
+        }
+
+    file_uuid_md5_info = data_color_dict
+    another_tree = []
+    if result_tree:
+        now_node = another_tree
+        iteration = result_tree
+        parent = ''
+        ge_tree(now_node, iteration, parent, file_uuid_md5_info)
+
+    # json_data = json.dumps(another_tree)
+    return another_tree
+
+
 
 # def change_file(file):
 #     if file['categories'] == '' and file['subtype'] == '':
