@@ -31,20 +31,20 @@ def test(request):
 
 
 def get_time_line_chart(request):
-    # params = json.loads(request.body)
-    # file_filter = params['filter']
-    # line_type = params['type']
-    # time_type = params['time']
+    params = json.loads(request.body)
+    file_filter = params['filter']
+    line_type = params['type']
+    time_type = params['time']
 
     # 文件过滤为空的逻辑，以确定where_str
-    file_filter = {
-        'malwareType': ['网站后门', '恶意进程'],
-        'malwareSubtype': ['WEBSHELL', '木马程序'],
-        'fileType': ['WEBSHELL', 'BIN']
-    }
-
-    line_type = 'malwareType'
-    time_type = '7 days'
+    # file_filter = {
+    #     'malwareType': ['网站后门', '恶意进程'],
+    #     'malwareSubtype': ['WEBSHELL', '木马程序'],
+    #     'fileType': ['WEBSHELL', 'BIN']
+    # }
+    #
+    # line_type = 'malwareType'
+    # time_type = '7 days'
 
     has_filter = has_filter_func(file_filter)
 
