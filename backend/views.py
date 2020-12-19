@@ -3,9 +3,10 @@ from django.db import connection
 from backend.util import get_file_where_str, get_file_and_time_where_str, get_time_str, get_time_where_str, \
     get_slice_where_str, get_timestamp, has_filter_func, get_vpc_score_info, get_vpc_score, get_time_str_by_time_type, generate_opcode_csv, generate_opcode_tree
 from vcs_django.settings import BASE_DIR
-from backend.config import MALWARE_SUBTYPE, FINAL_TIME, INIT_TIME
+from backend.config import MALWARE_SUBTYPE, FINAL_TIME, INIT_TIME, REGION_LIST
 import pandas as pd
 import numpy as np
+import datetime
 import time
 import random
 import json
@@ -166,21 +167,21 @@ def get_time_line_chart(request):
 
 # UI-v2 view1 treeMap and 拓扑可视化图谱
 def get_space_tree_map(request):
-    params = json.loads(request.body)
-    file_filter = params['filter']
-    time_slice = params['slice']
-
+    # params = json.loads(request.body)
+    # file_filter = params['filter']
+    # time_slice = params['slice']
+    # is_hide = params['isHide']
     # 文件过滤为空的逻辑，以确定where_str
-    # file_filter = {
-    #     'malwareType': ['网站后门', '恶意进程'],
-    #     'malwareSubtype': ['WEBSHELL', '挖矿程序'],
-    #     'fileType': ['BIN', 'WEBSHELL']
-    # }
-    # time_slice = {
-    #     'beginTime': 0.58,
-    #     'endTime': 0.6
-    # }
-
+    file_filter = {
+        'malwareType': ['网站后门', '恶意进程'],
+        'malwareSubtype': ['WEBSHELL', '挖矿程序'],
+        'fileType': ['BIN', 'WEBSHELL']
+    }
+    time_slice = {
+        'beginTime': 0.58,
+        'endTime': 0.6
+    }
+    is_hide = True
     has_filter = has_filter_func(file_filter)
 
     # 时间片或文件过滤为空的逻辑，以确定where_str
@@ -247,7 +248,7 @@ def get_space_tree_map(request):
         pattern_number_dict[pattern_dict[t['uuid']]['pattern']]['ecsNum'] += 1
         pattern_number_dict[pattern_dict[t['uuid']]['pattern']]['fileNum'] += t['file_num']
 
-    # 做拓扑可视化图谱的数据
+    # 做拓扑可视化图谱的数据  一个region里面 添加regionx, 模式个数，ecs个数，top3的ecs
     topu_map = []
     for t in tree_map_uuid:
         topu_map.append({
@@ -270,6 +271,31 @@ def get_space_tree_map(request):
         if has_region:
             has_vpc = False
             before_vpc = {}
+
+            # 添加3个指标
+            before_region['ecs_num'] += 1
+            for br in before_region['pattern_num']:
+                if pattern_dict[d['ECS_ID']]['pattern'] == br['patertn_name']:
+                    br['ecs_num'] += 1
+
+            is_equl_top_n = False
+            if len(before_region['top_ecs']) >= 3:
+                is_equl_top_n = True
+                for i in range(len(before_region['top_ecs'])):
+                    if before_region['top_ecs'][i]['file_num'] < d['file_num']:
+                        before_region['top_ecs'][i]['ecs_name'] = d['ECS_ID']
+                        before_region['top_ecs'][i]['file_num'] = d['file_num']
+                        break
+
+            else:
+                before_region['top_ecs'].append({
+                    'ecs_name': d['ECS_ID'],
+                    'file_num': d['file_num']
+                })
+
+            if not is_equl_top_n:
+                before_region['top_ecs'] = sorted(before_region['top_ecs'], key=lambda value: value['file_num'], reverse=True)
+
             for vpc in before_region['children']:
                 if d['VPC_ID'] == vpc['ID']:
                     has_vpc = True
@@ -278,6 +304,7 @@ def get_space_tree_map(request):
             if has_vpc:
                 has_az = False
                 before_az = {}
+                before_vpc['ecs_num'] += 1
                 for az in before_vpc['children']:
                     if d['AS_ID'] == az['ID']:
                         has_az = True
@@ -301,6 +328,8 @@ def get_space_tree_map(request):
             else:
                 before_region['children'].append({
                     'ID': d['VPC_ID'],
+                    'ecs_num': 1,
+                    'pattern': pattern_dict[d['ECS_ID']]['pattern'],
                     'children': []
                 })
 
@@ -319,11 +348,36 @@ def get_space_tree_map(request):
         else:
             region_list.append({
                 'ID': d['Region_ID'],
+                'pattern_num': [],
+                'ecs_num': 1,
+                'top_ecs': [],
                 'children': [],
             })
+
             region = region_list[len(region_list) - 1]
+
+            # 添加3个指标
+            for pl in pattern_list:
+                if pl == pattern_dict[d['ECS_ID']]['pattern']:
+                    region['pattern_num'].append({
+                        'patertn_name': pl,
+                        'ecs_num': 1
+                    })
+                else:
+                    region['pattern_num'].append({
+                        'patertn_name': pl,
+                        'ecs_num': 0
+                    })
+
+            region['top_ecs'].append({
+                'ecs_name': d['ECS_ID'],
+                'file_num': d['file_num']
+            })
+
             region['children'].append({
                 'ID': d['VPC_ID'],
+                'ecs_num': 1,
+                'pattern': pattern_dict[d['ECS_ID']]['pattern'],
                 'children': [],
             })
 
@@ -339,6 +393,39 @@ def get_space_tree_map(request):
                 'file_num': d['file_num']
             })
 
+    # 如果要隐藏VPC的话，每个模式留下前十的vpc吧
+    hide_num = 10
+    if is_hide:
+        for region in region_list:
+            vpc_pattern_list = {
+                'multi-az': [],
+                'flower': [],
+                'chain': [],
+                'only-ecs': []
+            }
+            for vpc in region['children']:
+                vpc_pattern_list[vpc['pattern']].append({
+                    'vpc_id': vpc['ID'],
+                    'vpc_ecs_num': vpc['ecs_num']
+                })
+
+            for vpk in vpc_pattern_list:
+                vpc_pattern_list[vpk] = sorted(vpc_pattern_list[vpk], key=lambda value: value['vpc_ecs_num'], reverse=True)
+
+            for vpci in range(len(region['children']) - 1, -1, -1):
+                vpc = region['children'][vpci]
+                if len(vpc_pattern_list[vpc['pattern']]) > hide_num:
+                    is_vpc_in = False
+                    for real_vpc in vpc_pattern_list[vpc['pattern']][0: 10]:
+                        if vpc['ID'] == real_vpc['vpc_id']:
+                            is_vpc_in = True
+
+                    if not is_vpc_in:
+                        region['children'].pop(vpci)
+
+    region_list = sorted(region_list, key=lambda value: value['ecs_num'], reverse=True)
+
+    # 处理为接口格式
     Data = {
         'treeMap': {
             'name': 'all',
@@ -346,7 +433,8 @@ def get_space_tree_map(request):
         },
         'topologicalMap': []
     }
-    # 处理为接口格式
+
+
     for pkey in pattern_number_dict:
         Data['treeMap']['children'].append({
             'patternName': pkey,
@@ -359,21 +447,21 @@ def get_space_tree_map(request):
 
 
 # UI-v2 view1 时空概览之4个模式
-def get_overview_pattern(request):
-    # params = json.loads(request.body)
-    # time_slice = params['slice']
-    # file_filter = params['fileFilter']
+def get_overview(request):
+    params = json.loads(request.body)
+    time_slice = params['slice']
+    file_filter = params['fileFilter']
 
-    time_slice = {
-        'beginTime': 0.58,
-        'endTime': 0.6
-    }
-
-    file_filter = {
-        'malwareType': ['网站后门', '恶意进程'],
-        'malwareSubtype': ['WEBSHELL', '挖矿程序'],
-        'fileType': ['BIN', 'WEBSHELL']
-    }
+    # time_slice = {
+    #     'beginTime': 0.58,
+    #     'endTime': 0.6
+    # }
+    #
+    # file_filter = {
+    #     'malwareType': ['网站后门', '恶意进程'],
+    #     'malwareSubtype': ['WEBSHELL', '挖矿程序'],
+    #     'fileType': ['BIN', 'WEBSHELL']
+    # }
 
     has_filter = has_filter_func(file_filter)
 
@@ -397,6 +485,8 @@ def get_overview_pattern(request):
         'name': 'all',
         'children': []
     }
+    max_file_num = 0
+    min_file_num = 1000000
 
     time_slice_num = 7
     for time_index in range(time_slice_num):
@@ -426,7 +516,7 @@ def get_overview_pattern(request):
             where_str = get_time_where_str(begin_time_str, end_time_str)
         else:
             begin_time_number = 0
-            end_time_number = 0
+            end_time_number = 1
             begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
             where_str = ''
 
@@ -453,55 +543,113 @@ def get_overview_pattern(request):
         all_data = cursor.fetchall()
         overview_pattern = [dict(zip([col[0] for col in desc], row)) for row in all_data]
 
+        # 获取所有region下的文件数量 聚合成小时
+
+        begin_datatime = datetime.datetime.strptime(begin_time_str, "%Y-%m-%d %H:%M:%S")
+        end_datatime = datetime.datetime.strptime(end_time_str, "%Y-%m-%d %H:%M:%S")
+        new_begin_time_str = begin_datatime.strftime("%Y-%m-%d %H")  + ":00:00"
+        new_end_time_str = end_datatime.strftime("%Y-%m-%d %H") + ":00:00"
+        begin_time_stamp = time.mktime(time.strptime(new_begin_time_str, "%Y-%m-%d %H:%M:%S"))
+        end_time_stamp = time.mktime(time.strptime(new_end_time_str, "%Y-%m-%d %H:%M:%S"))
+        stamp_length = end_time_stamp - begin_time_stamp
+
+        cursor = connection.cursor()
+        cursor.execute("select concat(DATE_FORMAT(create_time, '%Y-%m-%d %H'),':00:00') as time, "
+                       "count(*) AS malwareNumber "
+                       "from malware_base_info " + where_str + " group by DATE_FORMAT(create_time, '%Y-%m-%d %H')")
+
+        desc = cursor.description
+        all_data = cursor.fetchall()
+        all_region_file_num = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+
+        time_data_file_num = []
+        for ar in all_region_file_num:
+            # 将time_str 转为 num
+            this_stamp = time.mktime(time.strptime(ar['time'], "%Y-%m-%d %H:%M:%S"))
+            this_number = (this_stamp - begin_time_stamp) / stamp_length
+            time_data_file_num.append({
+                'time_num': this_number,
+                'file_num': ar['malwareNumber']
+            })
+
         time_data = {
             'time_T': 'T' + str(time_index),
             'start_time': begin_time_str,
             'end_time': end_time_str,
+            'top_ecs': [],
+            'file_num_with_time': time_data_file_num,
             'children': []
         }
 
+        # 添加所有region
+        region_list = REGION_LIST
+        for rl in region_list:
+            time_data['children'].append({
+                'ID': rl,
+                'file_num': 0,
+                'malware_file_info': [],
+                'children': []
+            })
+
+            ecs_in_region = time_data['children'][len(time_data['children']) - 1]
+
+            if file_filter['malwareSubtype']:
+                for ms in file_filter['malwareSubtype']:
+                    ecs_in_region['malware_file_info'].append({
+                        'name': ms,
+                        'file_num': 0
+                    })
+            else:
+                for ms in MALWARE_SUBTYPE:
+                    ecs_in_region['malware_file_info'].append({
+                        'name': ms,
+                        'file_num': 0
+                    })
+
+            pattern_list = ['multi-az', 'flower', 'chain', 'only-ecs']
+            for ptl in pattern_list:
+                ecs_in_region['children'].append({
+                    'name': ptl,
+                    'file_num': 0,
+                    'ecs_num': 0
+                })
+
+        top_ecs_list = []
+        top_n = 6  # 前6个ecs
         for o in overview_pattern:
             ecs_pattern_info = uuid_pattern_dict[o['uuid']]
-            has_region = False
             ecs_in_region = {}
             for region in time_data['children']:
                 if region['ID'] == ecs_pattern_info['Region_ID']:
-                    has_region = True
                     ecs_in_region = region
-            if not has_region:
-                time_data['children'].append({
-                    'ID': ecs_pattern_info['Region_ID'],
-                    'file_num': 0,
-                    'malware_file_info': [],
-                    'children': []
+
+            # 找Top6 ecs
+            if len(top_ecs_list) < top_n:
+                top_ecs_list.append({
+                    'ecs_id': o['uuid'],
+                    'az_id': ecs_pattern_info['AS_ID'],
+                    'vpc_id': ecs_pattern_info['VPC_ID'],
+                    'region_id': ecs_pattern_info['Region_ID'],
+                    'file_num': o['malwareNumber']
                 })
-
-                ecs_in_region = time_data['children'][len(time_data['children']) - 1]
-
-                if file_filter['malwareSubtype']:
-                    for ms in file_filter['malwareSubtype']:
-                        ecs_in_region['malware_file_info'].append({
-                            'name': ms,
-                            'file_num': 0
-                        })
-                else:
-                    for ms in MALWARE_SUBTYPE:
-                        ecs_in_region['malware_file_info'].append({
-                            'name': ms,
-                            'file_num': 0
-                        })
-
-                pattern_list = ['multi-az', 'flower', 'chain', 'only-ecs']
-                for ptl in pattern_list:
-                    ecs_in_region['children'].append({
-                        'name': ptl,
-                        'file_num': 0,
-                        'ecs_num': 0
-                    })
+            else:
+                for tel_i in range(len(top_ecs_list)):
+                    if o['malwareNumber'] > top_ecs_list[tel_i]['file_num']:
+                        top_ecs_list[tel_i] = {
+                            'ecs_id': o['uuid'],
+                            'az_id': ecs_pattern_info['AS_ID'],
+                            'vpc_id': ecs_pattern_info['VPC_ID'],
+                            'region_id': ecs_pattern_info['Region_ID'],
+                            'file_num': o['malwareNumber']
+                        }
+                    break
 
             # 文件总数
             ecs_in_region['file_num'] += o['malwareNumber']
-
+            if ecs_in_region['file_num'] > max_file_num:
+                max_file_num = ecs_in_region['file_num']
+            if ecs_in_region['file_num'] < min_file_num:
+                min_file_num = ecs_in_region['file_num']
             # 文件子类型
             for mfi in ecs_in_region['malware_file_info']:
                 mfi['file_num'] += int(o[mfi['name']])
@@ -511,8 +659,15 @@ def get_overview_pattern(request):
                 if pn['name'] == ecs_pattern_info['pattern']:
                     pn['file_num'] += int(o['malwareNumber'])
                     pn['ecs_num'] += 1
-
+        top_ecs_list = sorted(top_ecs_list, key=lambda value: value['file_num'], reverse=True)
+        time_data['top_ecs'] = top_ecs_list
         Data['children'].append(time_data)
+
+    if min_file_num == 1000000:
+        min_file_num = 0
+    Data['max_file_num'] = max_file_num
+    Data['min_file_num'] = min_file_num
+
     return HttpResponse(json.dumps(Data), content_type='application/json')
 
 
@@ -526,7 +681,6 @@ def get_opcode_tree_map(request):
     params_file_md5 = '00b0dfc7f918e5114e083f501ffbcdf3'
 
     opcode_csv = generate_opcode_csv(params_uuid, params_file_md5)
-    print(opcode_csv)
     opcode_tree = generate_opcode_tree(opcode_csv)
 
     return HttpResponse(json.dumps(opcode_tree), content_type='application/json')
@@ -661,7 +815,7 @@ def get_ecs_force(request):
     #     'malwareSubtype': ['WEBSHELL', '挖矿程序'],
     #     'fileType': ['BIN', 'WEBSHELL']
     # }
-    #
+
     # file = {
     #     'categories': 'malwareSubtype',
     #     'subtype': 'WEBSHELL'
@@ -700,9 +854,11 @@ def get_ecs_force(request):
         where_str = get_time_where_str(begin_time_str, end_time_str)
     else:
         begin_time_number = 0
+        end_time_number = 0
+        begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
         where_str = ''
-    cursor = connection.cursor()
 
+    cursor = connection.cursor()
     cursor.execute(
         "select uuid AS ESC_ID, AS_ID, VPC_ID, Region_ID, "
         "count(malware_type) AS malwareNumber, "
@@ -728,6 +884,26 @@ def get_ecs_force(request):
     desc = cursor.description
     all_data = cursor.fetchall()
     ecs_force_and_file = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+
+    # 开启类别跟踪
+    last_time_ecs = []
+    is_out_of_time = False
+    if file['categories'] != '' and file['subtype'] != '':
+        # 修改time
+        time_length = end_time_number - begin_time_number
+        new_begin_time_number = begin_time_number - time_length
+        new_end_time_number = begin_time_number
+        new_begin_time_str, new_end_time_str= get_time_str(new_begin_time_number, new_end_time_number)
+        if new_begin_time_number < 0:
+            is_out_of_time = True
+        else:
+            file_where_str = get_time_where_str(new_begin_time_str, new_end_time_str)
+            cursor = connection.cursor()
+            cursor.execute(
+                "select distinct uuid from malware_base_info " + file_where_str + " group by uuid")
+            desc = cursor.description
+            all_data = cursor.fetchall()
+            last_time_ecs = [dict(zip([col[0] for col in desc], row)) for row in all_data]
 
     # 再取出所有的ECS
     cursor.execute("select ECS_ID AS ESC_ID, AS_ID, VPC_ID, Region_ID from user_netstate_info")
@@ -872,85 +1048,136 @@ def get_ecs_force(request):
         for i in range(len(ecs_force_and_file)):
             is_highlight.append(False)
 
-    # 从小到大嵌套
-    AS_ECS_TYPE = []
-    for i in range(len(ecs_force_and_file)):
-        AS_ECS_TYPE.append({
-            'Region_ID': ecs_force_and_file[i]['Region_ID'],
-            'VPC_ID': ecs_force_and_file[i]['VPC_ID'],
-            'AS_ID': ecs_force_and_file[i]['AS_ID'],
-            'ECS_ID': ecs_force_and_file[i]['ESC_ID'],
-            'type': level_value_info[i],
-            'radius': radius[i],
-            'fileInfo': file_info_result[i],
-            # 'forceValue': math.sqrt(level_value[i]),
-            'isExtremelyDangerous': is_extremely_dangerous[i],
-            'isHighLight': is_highlight[i],
-            'ecsFileNum': ecs_force_and_file[i]['malwareNumber'],
-            'malware_type': file_info_malware_type[i],
-            'malware_subtype': file_info_malware_subtype[i]
-        })
+    ecs_specific_info = {}
+    if file['categories'] != '' and file['subtype'] != '' and not is_out_of_time:
+        # 变换一下
+        last_time_ecs_list = []
+        for lte in last_time_ecs:
+            last_time_ecs_list.append(lte['uuid'])
 
-    AS_ECS = []
-    AS_ECS_set = set()
-    for i in range(len(AS_ECS_TYPE)):
-        if AS_ECS_TYPE[i]['AS_ID'] != '':
-            if AS_ECS_TYPE[i]['AS_ID'] not in AS_ECS_set:
-                AS_ECS.append({
+        for i in range(len(ecs_force_and_file)):
+            ecs_specific_info[ecs_force_and_file[i]['ESC_ID']] = {
+                'Region_ID': ecs_force_and_file[i]['Region_ID'],
+                'VPC_ID': ecs_force_and_file[i]['VPC_ID'],
+                'AS_ID': ecs_force_and_file[i]['AS_ID'],
+                'ECS_ID': ecs_force_and_file[i]['ESC_ID'],
+                'type': level_value_info[i],
+                'radius': radius[i],
+                'fileInfo': file_info_result[i],
+                'isExtremelyDangerous': is_extremely_dangerous[i],
+                'isHighLight': is_highlight[i],
+                'ecsFileNum': ecs_force_and_file[i]['malwareNumber'],
+                'malware_type': file_info_malware_type[i],
+                'malware_subtype': file_info_malware_subtype[i]
+            }
+            if ecs_force_and_file[i]['ESC_ID'] in last_time_ecs_list:
+                ecs_specific_info[ecs_force_and_file[i]['ESC_ID']]['isTransparent'] = True
+            else:
+                ecs_specific_info[ecs_force_and_file[i]['ESC_ID']]['isTransparent'] = False
+    else:
+        for i in range(len(ecs_force_and_file)):
+            ecs_specific_info[ecs_force_and_file[i]['ESC_ID']] = {
+                'Region_ID': ecs_force_and_file[i]['Region_ID'],
+                'VPC_ID': ecs_force_and_file[i]['VPC_ID'],
+                'AS_ID': ecs_force_and_file[i]['AS_ID'],
+                'ECS_ID': ecs_force_and_file[i]['ESC_ID'],
+                'type': level_value_info[i],
+                'radius': radius[i],
+                'fileInfo': file_info_result[i],
+                'isExtremelyDangerous': is_extremely_dangerous[i],
+                'isTransparent': False,
+                'isHighLight': is_highlight[i],
+                'ecsFileNum': ecs_force_and_file[i]['malwareNumber'],
+                'malware_type': file_info_malware_type[i],
+                'malware_subtype': file_info_malware_subtype[i]
+            }
+
+    region_list = []
+    # 改 从大到小嵌套
+    for dkey in ecs_specific_info:
+        d = ecs_specific_info[dkey]
+        has_region = False
+        before_region = {}
+        for region in region_list:
+            if d['Region_ID'] == region['Region_ID']:
+                has_region = True
+                before_region = region
+        if has_region:
+            has_vpc = False
+            before_vpc = {}
+            for vpc in before_region['Region_VPC']:
+                if d['VPC_ID'] == vpc['VPC_ID']:
+                    has_vpc = True
+                    before_vpc = vpc
+
+            if has_vpc:
+                has_az = False
+                before_az = {}
+                for az in before_vpc['AS_ECS']:
+                    if d['AS_ID'] == az['AS_ID']:
+                        has_az = True
+                        before_az = az
+                if has_az:
+                    before_az['AS_ECS_TYPE'].append(d)
+                    before_region['ECS_NUM'] += 1
+                    before_vpc['ECS_NUM'] += 1
+                else:
+                    before_vpc['AS_ECS'].append({
+                        'AS_ID': d['AS_ID'],
+                        'AS_ECS_TYPE': []
+                    })
+
+                    az = before_vpc['AS_ECS'][len(before_vpc['AS_ECS']) - 1]
+                    az['AS_ECS_TYPE'].append(d)
+                    before_region['ECS_NUM'] += 1
+                    before_region['AS_NUM'] += 1
+                    before_vpc['ECS_NUM'] += 1
+                    before_vpc['AS_NUM'] += 1
+            else:
+                before_region['Region_VPC'].append({
+                    'VPC_ID': d['VPC_ID'],
+                    'AS_ECS': [],
                     'ECS_NUM': 1,
-                    'Region_ID': AS_ECS_TYPE[i]['Region_ID'],
-                    'VPC_ID': AS_ECS_TYPE[i]['VPC_ID'],
-                    'AS_ID': AS_ECS_TYPE[i]['AS_ID'],
-                    'AS_ECS_TYPE': [AS_ECS_TYPE[i]]
-                })
-                AS_ECS_set.add(ecs_force_and_file[i]['AS_ID'])
-            else:
-                for AS in AS_ECS:
-                    if AS['AS_ID'] == AS_ECS_TYPE[i]['AS_ID']:
-                        AS['AS_ECS_TYPE'].append(AS_ECS_TYPE[i])
-                        AS['ECS_NUM'] += 1
-
-    Region_VPC = []
-    Region_VPC_set = set()
-
-    for i in range(len(AS_ECS)):
-        # 判断是否含有vpc
-        if AS_ECS[i]['VPC_ID'] != '':
-            if AS_ECS[i]['VPC_ID'] not in Region_VPC_set:
-                Region_VPC.append({
                     'AS_NUM': 1,
-                    'ECS_NUM': AS_ECS[i]['ECS_NUM'],
-                    'VPC_ID': AS_ECS[i]['VPC_ID'],
-                    'AS_ECS': [AS_ECS[i]]
                 })
-                Region_VPC_set.add(AS_ECS[i]['VPC_ID'])
-            else:
-                for VPC in Region_VPC:
-                    if VPC['VPC_ID'] == AS_ECS[i]['VPC_ID']:
-                        VPC['AS_ECS'].append(AS_ECS[i])
-                        VPC['AS_NUM'] += 1
-                        VPC['ECS_NUM'] += AS_ECS[i]['ECS_NUM']
 
-    allData = []
-    Region_set = set()
-    for i in range(len(Region_VPC)):
-        # 判断是否含有vpc
-        if Region_VPC[i]['AS_ECS'][0]['Region_ID'] not in Region_set:
-            allData.append({
-                'VPC_NUM': 1,
-                'AS_NUM': Region_VPC[i]['AS_NUM'],
-                'ECS_NUM': Region_VPC[i]['ECS_NUM'],
-                'Region_ID': Region_VPC[i]['AS_ECS'][0]['Region_ID'],
-                'Region_VPC': [Region_VPC[i]]
-            })
-            Region_set.add(Region_VPC[i]['AS_ECS'][0]['Region_ID'])
+                vpc = before_region['Region_VPC'][len(before_region['Region_VPC']) - 1]
+                vpc['AS_ECS'].append({
+                    'AS_ID': d['AS_ID'],
+                    'AS_ECS_TYPE': []
+                })
+
+                az = vpc['AS_ECS'][len(vpc['AS_ECS']) - 1]
+                az['AS_ECS_TYPE'].append(d)
+                before_region['ECS_NUM'] += 1
+                before_region['AS_NUM'] += 1
+                before_region['VPC_NUM'] += 1
         else:
-            for Region in allData:
-                if Region['Region_ID'] == Region_VPC[i]['AS_ECS'][0]['Region_ID']:
-                    Region['Region_VPC'].append(Region_VPC[i])
-                    Region['VPC_NUM'] += 1
-                    Region['AS_NUM'] += Region_VPC[i]['AS_NUM']
-                    Region['ECS_NUM'] += Region_VPC[i]['ECS_NUM']
+            region_list.append({
+                'Region_ID': d['Region_ID'],
+                'Region_VPC': [],
+                'ECS_NUM': 1,
+                'AS_NUM': 1,
+                'VPC_NUM': 1,
+            })
+            region = region_list[len(region_list) - 1]
+            region['Region_VPC'].append({
+                'VPC_ID': d['VPC_ID'],
+                'AS_ECS': [],
+                'ECS_NUM': 1,
+                'AS_NUM': 1,
+            })
+
+            vpc = region['Region_VPC'][len(region['Region_VPC']) - 1]
+            vpc['AS_ECS'].append({
+                'AS_ID': d['AS_ID'],
+                'AS_ECS_TYPE': [],
+            })
+
+            az = vpc['AS_ECS'][len(vpc['AS_ECS']) - 1]
+            az['AS_ECS_TYPE'].append(d)
+
+    allData = region_list
 
     # allData 里面每个vpc进行组间排序
     for i in range(len(allData)):
@@ -1049,7 +1276,8 @@ def get_ecs_force(request):
 
         # only-ecs
         as_ecs_type = []
-        for ecs in AS_ECS_TYPE:
+        for ecs_key in ecs_specific_info:
+            ecs = ecs_specific_info[ecs_key]
             if ecs['VPC_ID'] == "" and ecs['Region_ID'] == allData[i]['Region_ID']:
                 as_ecs_type.append(ecs)
         if as_ecs_type:

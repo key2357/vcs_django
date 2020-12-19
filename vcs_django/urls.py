@@ -29,6 +29,5 @@ urlpatterns = [
     path('getTimeLineChart/', views.get_time_line_chart),
     path('getSpaceTreeMap/', views.get_space_tree_map),
     path('getOpcodeTreeMap/', views.get_opcode_tree_map),
-    path('getOverViewPattern/', views.get_overview_pattern),
-
+    path('getOverview/', views.get_overview),
 ]
