@@ -132,8 +132,19 @@ def get_vpc_score_info(vpc, max_info):
 
 
 def get_vpc_score(score_info, alpha, beta, theta, gamma, max_info):
-    return alpha * score_info[0] / max_info[0] + beta * score_info[1] / max_info[1] + theta * score_info[
-        2] / max_info[2] + gamma * score_info[3] / max_info[3]
+    a = 0
+    if max_info[0] != 0:
+        a = alpha * score_info[0] / max_info[0]
+    b = 0
+    if max_info[1] != 0:
+        b = beta * score_info[1] / max_info[1]
+    c = 0
+    if max_info[2] != 0:
+        c = theta * score_info[2] / max_info[2]
+    d = 0
+    if max_info[3] != 0:
+        d = gamma * score_info[3] / max_info[3]
+    return a + b + c + d
 
 
 def get_time_str_by_time_type(time_type):
@@ -158,7 +169,7 @@ def generate_opcode_csv(uuid, file_md5):
     # 加一个字段order
     cursor = connection.cursor()
     cursor.execute("select uuid, file_md5, `name`, `caller`, argc, argv, `return`, `index`, dynamic "
-                   "from malware_op_code_text where file_md5 = '{1}' and uuid = '{0}' ".format(uuid, file_md5))
+                   "from malware_op_code where file_md5 = '{1}' and uuid = '{0}' ".format(uuid, file_md5))
     desc = cursor.description
     all_data = cursor.fetchall()
     ecs_force_and_file = [dict(zip([col[0] for col in desc], row)) for row in all_data]

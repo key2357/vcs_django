@@ -1,7 +1,8 @@
 from django.http import HttpResponse
 from django.db import connection
 from backend.util import get_file_where_str, get_file_and_time_where_str, get_time_str, get_time_where_str, \
-    get_slice_where_str, get_timestamp, has_filter_func, get_vpc_score_info, get_vpc_score, get_time_str_by_time_type, generate_opcode_csv, generate_opcode_tree
+    get_slice_where_str, get_timestamp, has_filter_func, get_vpc_score_info, get_vpc_score, get_time_str_by_time_type, \
+    generate_opcode_csv, generate_opcode_tree
 from vcs_django.settings import BASE_DIR
 from backend.config import MALWARE_SUBTYPE, FINAL_TIME, INIT_TIME, REGION_LIST
 import pandas as pd
@@ -16,21 +17,118 @@ import networkx as nx
 
 # import matplotlib.pyplot as plt
 # 13903 373668
+
+
 def test(request):
-    cursor = connection.cursor()
-    cursor.execute("select uuid, file_md5, `name`, `caller`, argc, argv, `return`, `index`, dynamic "
-                   "from malware_op_code_text")
-    desc = cursor.description
-    all_data = cursor.fetchall()
-    ecs_force_and_file = [dict(zip([col[0] for col in desc], row)) for row in all_data]
-    for e in ecs_force_and_file:
-        if len(e['file_md5']) > 50:
-            print(e['uuid'], '|', e['file_md5'])
+    b = '2020-10-01 00:00:00'
+    e = '2020-10-02 00:00:00'
 
-    data = {}
-    return HttpResponse(json.dumps(data), content_type='application/json')
+    bt = time.mktime(time.strptime(b, "%Y-%m-%d %H:%M:%S"))
+    et = time.mktime(time.strptime(e, "%Y-%m-%d %H:%M:%S"))
+    print(et - bt)
+
+    # old_begin_time_stamp = 1540279362
+    # old_end_time_stamp = 1565433095
+    # # 计算聚类
+    # cursor = connection.cursor()
+    # cursor.execute(
+    #     "select source_uuid, source_file_md5, target_uuid, target_file_md5 from similarity where source_create_time > '{0}' and source_create_time  < '{1}' and target_create_time > '{0}' and source_create_time < '{1}'".format(
+    #         old_begin_time_stamp, old_end_time_stamp, old_begin_time_stamp, old_end_time_stamp))
+    # desc = cursor.description
+    # all_data = cursor.fetchall()
+    # edge_info = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+
+    # edge_info = [{
+    #     'source_uuid': 's1',
+    #     'source_file_md5': 'f1',
+    #     'target_uuid': 's2',
+    #     'target_file_md5': 'f2'
+    # }, {
+    #     'source_uuid': 's2',
+    #     'source_file_md5': 'f2',
+    #     'target_uuid': 's3',
+    #     'target_file_md5': 'f3'
+    # }, {
+    #     'source_uuid': 's3',
+    #     'source_file_md5': 'f3',
+    #     'target_uuid': 's1',
+    #     'target_file_md5': 'f1'
+    # }, {
+    #     'source_uuid': 's4',
+    #     'source_file_md5': 'f4',
+    #     'target_uuid': 's5',
+    #     'target_file_md5': 'f5'
+    # }]
+    # link_info = []
+    # for ei in edge_info:
+    #     source_uuid_md5 = ei['source_uuid'] + '|' + ei['source_file_md5']
+    #     target_uuid_md5 = ei['target_uuid'] + '|' + ei['target_file_md5']
+    #     if [source_uuid_md5, target_uuid_md5] not in link_info:
+    #         link_info.append([source_uuid_md5, target_uuid_md5])
+    #
+    # is_still_not_com = True
+    # while is_still_not_com:
+    #     for li in link_info:
+    #         for link_i in range(2):
+    #             node = li[link_i]
+    #             is_still_not_com = False
+    #             node_array = node.split('|')
+    #             if len(node_array) <= 2:
+    #                 is_still_not_com = True
+    #                 new_source = node + '|u'
+    #                 li[link_i] = new_source
+    #
+    #                 for lii in link_info:
+    #                     source = lii[0]
+    #                     target = lii[1]
+    #                     if source == node or target == node:
+    #                         lii[0] = new_source
+    #                         lii[1] = new_source
+    #
+    # print(link_info)
+
+    # cursor = connection.cursor()
+    # cursor.execute(
+    #     "select uuid, malware_md5 from malware_base_info where create_time = '2019-02-11 14:35:21' and uuid = '98c4a591bb02715d6497e0fa36247671'")
+    # desc = cursor.description
+    # all_data = cursor.fetchall()
+    # ecs_force_and_file = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+    #
+    # file_md5_list = []
+    # for e in ecs_force_and_file:
+    #     file_md5_list.append(e['malware_md5'])
+    #
+    # cursor.execute(
+    #     "select uuid, file_md5, `name`, caller, argc, argv, `return`, `index`, `dynamic` from malware_op_code")
+    # desc = cursor.description
+    # alldata = cursor.fetchall()
+    # file_data = [dict(zip([col[0] for col in desc], row)) for row in alldata]
+    #
+    # file_md5_after = []
+    # for f in file_data:
+    #     if f['file_md5'] in file_md5_list:
+    #         file_md5_after.append({
+    #                 'uuid': f['uuid'],
+    #                 'file_md5': f['file_md5'],
+    #                 'name': f['name'],
+    #                 'caller': f['caller'],
+    #                 'argc': f['argc'],
+    #                 'argv': f['argv'],
+    #                 'return': f['return'],
+    #                 'index': f['index'],
+    #                 'dynamic': f['dynamic'],
+    #             })
+    #
+    # print(len(file_md5_list))
+    # print(len(file_md5_after))
+    # name = ['uuid', 'file_md5', 'name', 'caller', 'argc', 'argv', 'return', 'index', 'dynamic']
+    # test = pd.DataFrame(columns=name, data=file_md5_after)
+    # test.to_csv('./similarity/file_opcode.csv', index=0)
+    ecs_force_and_file = {}
+    return HttpResponse(json.dumps(ecs_force_and_file), content_type='application/json')
 
 
+# 第一个界面 时间概览
 def get_time_line_chart(request):
     params = json.loads(request.body)
     file_filter = params['filter']
@@ -165,23 +263,25 @@ def get_time_line_chart(request):
     return HttpResponse(json.dumps(Data), content_type='application/json')
 
 
+# 第一个界面 空间概览
 # UI-v2 view1 treeMap and 拓扑可视化图谱
 def get_space_tree_map(request):
-    # params = json.loads(request.body)
-    # file_filter = params['filter']
-    # time_slice = params['slice']
-    # is_hide = params['isHide']
+    params = json.loads(request.body)
+    file_filter = params['filter']
+    time_slice = params['slice']
+    is_hide = params['isHide']
     # 文件过滤为空的逻辑，以确定where_str
-    file_filter = {
-        'malwareType': ['网站后门', '恶意进程'],
-        'malwareSubtype': ['WEBSHELL', '挖矿程序'],
-        'fileType': ['BIN', 'WEBSHELL']
-    }
-    time_slice = {
-        'beginTime': 0.58,
-        'endTime': 0.6
-    }
-    is_hide = True
+    # file_filter = {
+    #     'malwareType': [],
+    #     'malwareSubtype': [],
+    #     'fileType': []
+    # }
+    # time_slice = {
+    #     'beginTime': 0,
+    #     'endTime': 1
+    # }
+    # is_hide = True
+
     has_filter = has_filter_func(file_filter)
 
     # 时间片或文件过滤为空的逻辑，以确定where_str
@@ -294,7 +394,8 @@ def get_space_tree_map(request):
                 })
 
             if not is_equl_top_n:
-                before_region['top_ecs'] = sorted(before_region['top_ecs'], key=lambda value: value['file_num'], reverse=True)
+                before_region['top_ecs'] = sorted(before_region['top_ecs'], key=lambda value: value['file_num'],
+                                                  reverse=True)
 
             for vpc in before_region['children']:
                 if d['VPC_ID'] == vpc['ID']:
@@ -410,7 +511,8 @@ def get_space_tree_map(request):
                 })
 
             for vpk in vpc_pattern_list:
-                vpc_pattern_list[vpk] = sorted(vpc_pattern_list[vpk], key=lambda value: value['vpc_ecs_num'], reverse=True)
+                vpc_pattern_list[vpk] = sorted(vpc_pattern_list[vpk], key=lambda value: value['vpc_ecs_num'],
+                                               reverse=True)
 
             for vpci in range(len(region['children']) - 1, -1, -1):
                 vpc = region['children'][vpci]
@@ -434,7 +536,6 @@ def get_space_tree_map(request):
         'topologicalMap': []
     }
 
-
     for pkey in pattern_number_dict:
         Data['treeMap']['children'].append({
             'patternName': pkey,
@@ -446,6 +547,7 @@ def get_space_tree_map(request):
     return HttpResponse(json.dumps(Data), content_type='application/json')
 
 
+# 第一个界面 时空概览
 # UI-v2 view1 时空概览之4个模式
 def get_overview(request):
     params = json.loads(request.body)
@@ -491,9 +593,9 @@ def get_overview(request):
     time_slice_num = 7
     for time_index in range(time_slice_num):
         begin_time_number = time_slice['beginTime'] + (time_slice['endTime'] - time_slice['beginTime']) * (
-                    time_index / time_slice_num)
+                time_index / time_slice_num)
         end_time_number = time_slice['beginTime'] + (time_slice['endTime'] - time_slice['beginTime']) * (
-                    (time_index + 1) / time_slice_num)
+                (time_index + 1) / time_slice_num)
         # 时间片或文件过滤为空的逻辑，以确定where_str
         if has_filter and time_slice:
             begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
@@ -547,7 +649,7 @@ def get_overview(request):
 
         begin_datatime = datetime.datetime.strptime(begin_time_str, "%Y-%m-%d %H:%M:%S")
         end_datatime = datetime.datetime.strptime(end_time_str, "%Y-%m-%d %H:%M:%S")
-        new_begin_time_str = begin_datatime.strftime("%Y-%m-%d %H")  + ":00:00"
+        new_begin_time_str = begin_datatime.strftime("%Y-%m-%d %H") + ":00:00"
         new_end_time_str = end_datatime.strftime("%Y-%m-%d %H") + ":00:00"
         begin_time_stamp = time.mktime(time.strptime(new_begin_time_str, "%Y-%m-%d %H:%M:%S"))
         end_time_stamp = time.mktime(time.strptime(new_end_time_str, "%Y-%m-%d %H:%M:%S"))
@@ -671,22 +773,7 @@ def get_overview(request):
     return HttpResponse(json.dumps(Data), content_type='application/json')
 
 
-# opcode 中的层次树
-def get_opcode_tree_map(request):
-    # params = json.loads(request.body)
-    # params_uuid = params['uuid']
-    # params_file_md5 = params['file_md5']
-
-    params_uuid = '2786278ac90e43cac6fa717884c5a140'
-    params_file_md5 = '00b0dfc7f918e5114e083f501ffbcdf3'
-
-    opcode_csv = generate_opcode_csv(params_uuid, params_file_md5)
-    opcode_tree = generate_opcode_tree(opcode_csv)
-
-    return HttpResponse(json.dumps(opcode_tree), content_type='application/json')
-
-
-# 这个可以改为静态的了
+# 第二个界面 资产信息 以及恶意文件信息
 def get_base_info(request):
     cursor = connection.cursor()
     # 查询资产数量
@@ -733,6 +820,7 @@ def get_base_info(request):
     return HttpResponse(json.dumps(Data), content_type='application/json')
 
 
+# 第二个界面 折线图 不知道还要不要
 def get_force(request):
     # 文件过滤
     params = json.loads(request.body)
@@ -790,7 +878,8 @@ def get_force(request):
     return HttpResponse(json.dumps(ReturnData), content_type='application/json')
 
 
-# view3 态势等级视图 获取每个ECS的信息（包括ECS_ID、态势等级、聚类结果、半径、态势值、是否高危、是否高亮、文件信息）
+# 第二个界面 态势等级视图
+# 态势等级视图 获取每个ECS的信息（包括ECS_ID、态势等级、聚类结果、半径、态势值、是否高危、是否高亮、文件信息）
 def get_ecs_force(request):
     params = json.loads(request.body)
     slice = params['slice']
@@ -806,19 +895,19 @@ def get_ecs_force(request):
     # }
     #
     # slice = {
-    #     'beginTime': 0.58,
-    #     'endTime': 0.6
+    #     'beginTime': 0.07,
+    #     'endTime': 0.08
     # }
     #
     # file_filter = {
-    #     'malwareType': ['网站后门', '恶意进程'],
-    #     'malwareSubtype': ['WEBSHELL', '挖矿程序'],
-    #     'fileType': ['BIN', 'WEBSHELL']
+    #     'malwareType': [],
+    #     'malwareSubtype': [],
+    #     'fileType': []
     # }
-
+    #
     # file = {
-    #     'categories': 'malwareSubtype',
-    #     'subtype': 'WEBSHELL'
+    #     'categories': '',
+    #     'subtype': ''
     # }
 
     alpha = score_argv['alpha']
@@ -893,7 +982,7 @@ def get_ecs_force(request):
         time_length = end_time_number - begin_time_number
         new_begin_time_number = begin_time_number - time_length
         new_end_time_number = begin_time_number
-        new_begin_time_str, new_end_time_str= get_time_str(new_begin_time_number, new_end_time_number)
+        new_begin_time_str, new_end_time_str = get_time_str(new_begin_time_number, new_end_time_number)
         if new_begin_time_number < 0:
             is_out_of_time = True
         else:
@@ -1178,7 +1267,6 @@ def get_ecs_force(request):
             az['AS_ECS_TYPE'].append(d)
 
     allData = region_list
-
     # allData 里面每个vpc进行组间排序
     for i in range(len(allData)):
         multi_az_vpc = []
@@ -1336,7 +1424,7 @@ def get_ecs_force(request):
     return HttpResponse(json.dumps(ReturnData), content_type='application/json')
 
 
-# 用真数据
+# 第三个界面 opcode图谱
 def get_force_graph_by_time(request):
     params = json.loads(request.body)
     slice = params['slice']
@@ -1364,7 +1452,7 @@ def get_force_graph_by_time(request):
         where_str = ''
 
     cursor = connection.cursor()
-    cursor.execute("select `source`, target, similarity from similarity_info " + where_str)
+    cursor.execute("select `source_file_md5` as source, target_file_md5 as target, similarity_value as similarity from similarity_info " + where_str)
     desc = cursor.description
     all_data = cursor.fetchall()
     row_data = [dict(zip([col[0] for col in desc], row)) for row in all_data]
@@ -1553,3 +1641,471 @@ def get_force_graph_by_time(request):
 
     ReturnData = data
     return HttpResponse(json.dumps(ReturnData), content_type='application/json')
+
+
+# 第三个界面 层次树
+def get_opcode_tree_map(request):
+    params = json.loads(request.body)
+    params_uuid = params['uuid']
+    params_file_md5 = params['file_md5']
+
+    # params_uuid = '2786278ac90e43cac6fa717884c5a140'
+    # params_file_md5 = '00b0dfc7f918e5114e083f501ffbcdf3'
+
+    opcode_csv = generate_opcode_csv(params_uuid, params_file_md5)
+    opcode_tree = generate_opcode_tree(opcode_csv)
+    opcode_tree[0]['unique_id'] = params_uuid + params_file_md5
+    return HttpResponse(json.dumps(opcode_tree), content_type='application/json')
+
+
+# 第三个界面 opcode的使用概览
+def get_opcode_overview(request):
+    params = json.loads(request.body)
+    time_slice = params['slice']
+
+    # time_slice = {
+    #     'beginTime': 0.58,
+    #     'endTime': 0.6
+    # }
+
+    cursor = connection.cursor()
+    cursor.execute("select ECS_ID, AS_ID, VPC_ID, Region_ID, pattern from user_netstate_info ")
+    desc = cursor.description
+    all_data = cursor.fetchall()
+    uuid_and_pattern = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+
+    uuid_pattern_dict = {}
+    for u in uuid_and_pattern:
+        if u['pattern'] == 'multi-az':
+            u['pattern'] = 'multi_az'
+        elif u['pattern'] == 'only-ecs':
+            u['pattern'] = 'only_ecs'
+        uuid_pattern_dict[u['ECS_ID']] = {
+            'ECS_ID': u['ECS_ID'],
+            'AS_ID': u['AS_ID'],
+            'VPC_ID': u['VPC_ID'],
+            'Region_ID': u['Region_ID'],
+            'pattern': u['pattern']
+        }
+
+    max_file_num_r = 0
+    min_file_num_r = 1000000
+    max_file_num_p = 0
+    min_file_num_p = 1000000
+
+    Data = {
+        "name": "all",
+        "children": []
+    }
+
+    # 将时间片分为几份
+    time_slice_num = 14
+    for time_index in range(time_slice_num):
+        begin_time_number = time_slice['beginTime'] + (time_slice['endTime'] - time_slice['beginTime']) * (
+                time_index / time_slice_num)
+        end_time_number = time_slice['beginTime'] + (time_slice['endTime'] - time_slice['beginTime']) * (
+                (time_index + 1) / time_slice_num)
+
+        begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
+        where_str = get_time_where_str(begin_time_str, end_time_str)
+
+        old_begin_time_stamp = time.mktime(time.strptime(begin_time_str, "%Y-%m-%d %H:%M:%S"))
+        old_end_time_stamp = time.mktime(time.strptime(end_time_str, "%Y-%m-%d %H:%M:%S"))
+
+        # overview pattern
+        cursor = connection.cursor()
+        cursor.execute(
+            "select uuid, malware_md5, count(malware_type) AS malwareNumber, "
+            "sum(case when malware_type='WEBSHELL'then 1 else 0 end) as WEBSHELL, "
+            "sum(case when malware_type='DDOS木马' then 1 else 0 end) as DDOS木马,"
+            "sum(case when malware_type='被污染的基础软件' then 1 else 0 end) as 被污染的基础软件,"
+            "sum(case when malware_type='恶意程序' then 1 else 0 end) as 恶意程序,"
+            "sum(case when malware_type='恶意脚本文件' then 1 else 0 end) as 恶意脚本文件,"
+            "sum(case when malware_type='感染型病毒' then 1 else 0 end) as 感染型病毒,"
+            "sum(case when malware_type='黑客工具' then 1 else 0 end) as 黑客工具,"
+            "sum(case when malware_type='后门程序' then 1 else 0 end) as 后门程序,"
+            "sum(case when malware_type='勒索病毒' then 1 else 0 end) as 勒索病毒,"
+            "sum(case when malware_type='漏洞利用程序' then 1 else 0 end) as 漏洞利用程序,"
+            "sum(case when malware_type='木马程序' then 1 else 0 end) as 木马程序,"
+            "sum(case when malware_type='蠕虫病毒' then 1 else 0 end) as 蠕虫病毒,"
+            "sum(case when malware_type='挖矿程序' then 1 else 0 end) as 挖矿程序,"
+            "sum(case when malware_type='自变异木马' then 1 else 0 end) as 自变异木马 "
+            "from malware_base_info " + where_str + " group by uuid")
+        desc = cursor.description
+        all_data = cursor.fetchall()
+        opcode_overview_pattern = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+
+        # 生成uuid -> file_num
+        uuid_file_num = {}
+
+        # 计算该时间片的file_num
+        t_file_num = 0
+        for oop in opcode_overview_pattern:
+            t_file_num += oop['malwareNumber']
+            uuid_file_num[oop['uuid']] = oop['malwareNumber']
+
+        # 计算该时间片下，每个模式的文件
+        pattern_file_num = {
+            "chain": 0,
+            "flower": 0,
+            "multi_az": 0,
+            "only_ecs": 0
+        }
+
+        for oop in opcode_overview_pattern:
+            pattern_file_num[uuid_pattern_dict[oop['uuid']]['pattern']] += 1
+
+        for pfn in pattern_file_num:
+            if pattern_file_num[pfn] > max_file_num_p:
+                max_file_num_p = pattern_file_num[pfn]
+            if pattern_file_num[pfn] < min_file_num_p and pattern_file_num[pfn] != 0:
+                min_file_num_p = pattern_file_num[pfn]
+
+        # 计算每个region下的 file_num
+        region_file_num = []
+        region_list = REGION_LIST
+        for rl in region_list:
+            region_file_num.append({
+                'ID': rl,
+                'file_num': 0,
+            })
+
+        for oop in opcode_overview_pattern:
+            this_region_id = uuid_pattern_dict[oop['uuid']]['Region_ID']
+            for rfn in region_file_num:
+                if this_region_id == rfn['ID']:
+                    rfn['file_num'] += 1
+
+        for rfn in region_file_num:
+            if rfn['file_num'] > max_file_num_r:
+                max_file_num_r = rfn['file_num']
+            if rfn['file_num'] < min_file_num_r and rfn['file_num'] != 0:
+                min_file_num_r = rfn['file_num']
+
+        # 计算聚类
+        cursor = connection.cursor()
+        cursor.execute(
+            "select source_uuid, source_file_md5, target_uuid, target_file_md5 from similarity_info where source_create_time > '{0}' and source_create_time  < '{1}' and target_create_time > '{0}' and target_create_time < '{1}'".format(
+                old_begin_time_stamp, old_end_time_stamp, old_begin_time_stamp, old_end_time_stamp))
+        desc = cursor.description
+        all_data = cursor.fetchall()
+        edge_info = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+
+        # 先读取节点编码
+        with open(str(BASE_DIR) + '//similarity//uuid_md5_base_reverse.json', 'r', encoding='utf8') as fp:
+            uuid_md5_base_reverse = json.load(fp)
+
+        node_info_set = set()
+        link_info_set = set()
+        link_info = []
+        for ei in edge_info:
+            source_uuid_md5 = ei['source_uuid'] + '|' + ei['source_file_md5']
+            source_base = 'n' + uuid_md5_base_reverse[source_uuid_md5]
+            target_uuid_md5 = ei['target_uuid'] + '|' + ei['target_file_md5']
+            target_base = 'n' + uuid_md5_base_reverse[target_uuid_md5]
+            node_info_set.add(source_base)
+            node_info_set.add(target_base)
+            link_info_set.add((target_base, source_base))
+            if [source_uuid_md5, target_uuid_md5] not in link_info:
+                link_info.append([source_uuid_md5, target_uuid_md5])
+
+        c_count = 30000
+        for oop in opcode_overview_pattern:
+            node_uuid_md5 = oop['uuid'] + '|' + oop['malware_md5']
+            if node_uuid_md5 not in uuid_md5_base_reverse:
+                if str(c_count) not in node_info_set:
+                    node_info_set.add('n' + str(c_count))
+                    c_count += 1
+            else:
+                node_info_set.add('n' + uuid_md5_base_reverse[node_uuid_md5])
+
+        # 生成字典
+        link_dict = {}
+        for li in link_info:
+            if li[0] not in link_dict:
+                link_dict[li[0]] = li[0]
+            if li[1] not in link_dict:
+                link_dict[li[1]] = li[0]
+
+        for key in link_dict:
+            while link_dict[key] != key:
+                link_dict[key] = link_dict[link_dict[key]]
+                key = link_dict[key]
+
+        cluster_list = []
+        ecs_in_cluster_list = set()
+        for key in link_dict:
+            uuid_md5_array = key.split('|')
+            this_uuid = uuid_md5_array[0]
+            ecs_in_cluster_list.add(this_uuid)
+
+            if this_uuid in uuid_file_num:
+                is_in_cluster = False
+                for cl in cluster_list:
+                    if cl['name'] == link_dict[key]:
+                        is_in_cluster = True
+
+                        # 判断ecs是否在cluster里面
+                        is_ecs_in_cluster = False
+                        for e_cl in cl['ecs']:
+                            if e_cl['ecs_id'] == this_uuid:
+                                is_ecs_in_cluster = True
+
+                        if not is_ecs_in_cluster:
+                            cl['ecs'].append({
+                                'ecs_id': this_uuid,
+                                'az_id': uuid_pattern_dict[this_uuid]['AS_ID'],
+                                'vpc_id': uuid_pattern_dict[this_uuid]['VPC_ID'],
+                                'region_id': uuid_pattern_dict[this_uuid]['Region_ID'],
+                                'file_num': uuid_file_num[this_uuid],
+                            })
+
+                            cl['file_num'] += uuid_file_num[this_uuid]
+
+                if not is_in_cluster:
+                    cluster_list.append({
+                        'name': link_dict[key],
+                        'file_num': uuid_file_num[this_uuid],
+                        'ecs': [],
+                    })
+
+                    this_cluster = cluster_list[len(cluster_list) - 1]
+                    this_cluster['ecs'].append({
+                        'ecs_id': this_uuid,
+                        'az_id': uuid_pattern_dict[this_uuid]['AS_ID'],
+                        'vpc_id': uuid_pattern_dict[this_uuid]['VPC_ID'],
+                        'region_id': uuid_pattern_dict[this_uuid]['Region_ID'],
+                        'file_num': uuid_file_num[this_uuid],
+                    })
+
+        # cluster聚类数量sorted一下
+        cluster_list = sorted(cluster_list, key=lambda value: value['file_num'], reverse=True)
+
+        # 计算outlier
+        outlier_count = 0
+        for oop in opcode_overview_pattern:
+            if oop['uuid'] not in ecs_in_cluster_list:
+                outlier_count += 1
+
+        # 处理边信息和节点信息
+        nodes = []
+        links = []
+        for ns in node_info_set:
+            nodes.append({
+                'name': ns
+            })
+        for ls in link_info_set:
+            links.append({
+                'source': ls[0],
+                'target': ls[1]
+            })
+
+        # 每个时间片下的数据结构
+        time_data = {
+            'time_T': 'T' + str(time_index),
+            'start_time': begin_time_str,
+            'end_time': end_time_str,
+            'T_file_num': t_file_num,
+            'nodes': nodes,
+            'links': links,
+            'pattern': pattern_file_num,
+            'outliers': outlier_count,
+            'cluster': cluster_list,
+            'cluster_num': len(cluster_list),
+            'children': []
+        }
+
+        for rfn in region_file_num:
+            time_data['children'].append(rfn)
+
+        Data['children'].append(time_data)
+
+    if min_file_num_r == 1000000:
+        min_file_num_r = 0
+    if min_file_num_p == 1000000:
+        min_file_num_p = 0
+
+    Data['max_file_num_r'] = max_file_num_r
+    Data['min_file_num_r'] = min_file_num_r
+    Data['max_file_num_p'] = max_file_num_p
+    Data['min_file_num_p'] = min_file_num_p
+
+    return HttpResponse(json.dumps(Data), content_type='application/json')
+
+
+# 甘特图
+def get_gant_map(request):
+    # 文件过滤
+    params = json.loads(request.body)
+    file_filter = params['filter']
+
+    # 文件过滤为空的逻辑，以确定where_str
+    # file_filter = {
+    #     'malwareType': ['网站后门', '恶意进程'],
+    #     'malwareSubtype': ['WEBSHELL', '挖矿程序'],
+    #     'fileType': ['BIN', 'WEBSHELL']
+    # }
+
+    has_filter = has_filter_func(file_filter)
+
+    if has_filter:
+        malware_type_list = file_filter['malwareType']
+        malware_subtype_list = file_filter['malwareSubtype']
+        malware_filetype_list = file_filter['fileType']
+        begin_time_number = 0
+        end_time_number = 1
+        begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
+        where_str = get_file_and_time_where_str(malware_type_list, malware_subtype_list, malware_filetype_list,
+                                                begin_time_str, end_time_str)
+    else:
+        begin_time_number = 0
+        end_time_number = 1
+        begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
+        where_str = get_time_where_str(begin_time_str, end_time_str)
+
+    cursor = connection.cursor()
+    # 获取文件数量
+    cursor.execute("select uuid, create_time, malware_class, malware_type, file_type from malware_base_info " + where_str)
+    desc = cursor.description
+    all_data = cursor.fetchall()
+    file_num_all = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+
+    now_stamp = INIT_TIME
+    # 时间粒度
+    time_slice_length = 86400
+    return_data = []
+
+    # 读ecs细节信息
+    cursor.execute("select ECS_ID, Region_ID from user_netstate_info")
+
+    desc = cursor.description
+    all_data = cursor.fetchall()
+    engines_data = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+
+    ecs_region = {}
+    for en in engines_data:
+        ecs_region[en['ECS_ID']] = en['Region_ID']
+
+    while now_stamp < FINAL_TIME:
+        this_begin_time_stamp = now_stamp
+        this_end_time_stamp = this_begin_time_stamp + time_slice_length
+        return_data.append({
+            'time_str': time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(this_begin_time_stamp)),
+            'region_list': []
+        })
+
+        this_slice = return_data[len(return_data) - 1]
+        for i in range(len(REGION_LIST)):
+            this_slice['region_list'].append(0)
+
+        now_stamp += time_slice_length
+
+    for fna in file_num_all:
+        if fna['create_time'] != '0000-00-00 00:00:00':
+            # 获取region_index:
+            region_index = -1
+            for i in range(len(REGION_LIST)):
+                if ecs_region[fna['uuid']] == REGION_LIST[i]:
+                    region_index = i
+
+            the_create_time_stamp = time.mktime(time.strptime(str(fna['create_time']), "%Y-%m-%d %H:%M:%S"))
+            time_slice_index = int((the_create_time_stamp - INIT_TIME) / time_slice_length)
+
+            return_data[time_slice_index]['region_list'][region_index] += 1
+
+    # 处理为接口格式
+    ReturnData = {
+        'name': 'all',
+        'children': return_data
+    }
+
+    return HttpResponse(json.dumps(ReturnData), content_type='application/json')
+
+
+# ecs表格信息
+def get_ecs_table_info(request):
+    # 文件过滤
+    params = json.loads(request.body)
+    ecs_list = params['ecs_list']
+
+    # 文件过滤为空的逻辑，以确定where_str
+    # ecs_list = ['4d35d302f9f85068753a36b007bae5b5', 'b119ab4fcc58ef2b8c6c1a5b0d544f47', '572ff0911b2ac57d8513f3f17f321610']
+
+    # 读ecs细节信息
+    cursor = connection.cursor()
+    cursor.execute("select ECS_ID, AS_ID, VPC_ID, Region_ID, pattern from user_netstate_info")
+    desc = cursor.description
+    all_data = cursor.fetchall()
+    engines_data = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+
+    ecs_pattern_dict = {}
+    for en in engines_data:
+        ecs_pattern_dict[en['ECS_ID']] = {
+            'AS_ID' : en['AS_ID'],
+            'VPC_ID': en['VPC_ID'],
+            'Region_ID': en['Region_ID'],
+            'pattern': en['pattern']
+        }
+
+    ecs_info = {}
+    for ecs_id in ecs_list:
+        cursor = connection.cursor()
+        cursor.execute(
+            "select uuid, malware_md5, malware_class, malware_type, create_time from malware_base_info where uuid = '{0}'".format(ecs_id))
+        desc = cursor.description
+        all_data = cursor.fetchall()
+        ecs_force_and_file = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+
+        for efa in ecs_force_and_file:
+            if efa['uuid'] not in ecs_info:
+                ecs_path = efa['uuid'] + '|' + ecs_pattern_dict[efa['uuid']]['AS_ID'] + '|' + \
+                           ecs_pattern_dict[efa['uuid']]['VPC_ID'] + '|' + ecs_pattern_dict[efa['uuid']]['Region_ID']
+                file_info = {}
+                for fi in MALWARE_SUBTYPE:
+                    file_info[fi] = 0
+                file_info[efa['malware_type']] += 1
+
+                ecs_info[ecs_id] = {
+                    'ecs_id': efa['uuid'],
+                    'ecs_path': ecs_path,
+                    'ecs_pattern': ecs_pattern_dict[ecs_id]['pattern'],
+                    'file_num': 1,
+                    'file_info': file_info,
+                    'first_time': str(efa['create_time']),
+                    'last_time': str(efa['create_time']),
+                }
+
+            else:
+                this_ecs = ecs_info[efa['uuid']]
+                this_ecs['file_num'] += 1
+                this_ecs['file_info'][efa['malware_type']] += 1
+
+                if str(efa['create_time']) < this_ecs['first_time']:
+                    this_ecs['first_time'] = str(efa['create_time'])
+                if str(efa['create_time']) > this_ecs['last_time']:
+                    this_ecs['last_time'] = str(efa['create_time'])
+
+    # 改为接口格式
+    return_data = []
+    for ekey in ecs_info:
+        ecs = ecs_info[ekey]
+        ecs_file_info = ecs['file_info']
+        file_info_list = []
+        for efi_key in ecs_file_info:
+            file_info_list.append({
+                'sub_type': efi_key,
+                'file_num': ecs_file_info[efi_key]
+            })
+
+        return_data.append({
+            'ecs_id': ekey,
+            "ecs_path": ecs['ecs_path'],
+            "ecs_pattern": ecs['ecs_pattern'],
+            "file_num": ecs['file_num'],
+            'file_info': file_info_list,
+            'first_time': ecs['first_time'],
+            'last_time': ecs['last_time']
+        })
+
+    return HttpResponse(json.dumps(return_data), content_type='application/json')
+

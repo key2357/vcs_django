@@ -30,4 +30,8 @@ urlpatterns = [
     path('getSpaceTreeMap/', views.get_space_tree_map),
     path('getOpcodeTreeMap/', views.get_opcode_tree_map),
     path('getOverview/', views.get_overview),
+    path('getOpcodeOverview/', views.get_opcode_overview),
+    path('getGantMap/', views.get_gant_map),
+    path('getEcsTableInfo/', views.get_ecs_table_info),
+
 ]
