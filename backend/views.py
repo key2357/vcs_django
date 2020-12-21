@@ -20,16 +20,16 @@ import networkx as nx
 
 
 def test(request):
-    t2 = time.time()
-    # 计算聚类
-    cursor = connection.cursor()
-    cursor.execute(
-        "select source_uuid, source_file_md5, target_uuid, target_file_md5 from similarity_info")
-    desc = cursor.description
-    all_data = cursor.fetchall()
-    edge_info = [dict(zip([col[0] for col in desc], row)) for row in all_data]
-    t3 = time.time()
-    print(t3 - t2)
+    # t2 = time.time()
+    # # 计算聚类
+    # cursor = connection.cursor()
+    # cursor.execute(
+    #     "select source_uuid, source_file_md5, target_uuid, target_file_md5 from similarity_info")
+    # desc = cursor.description
+    # all_data = cursor.fetchall()
+    # edge_info = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+    # t3 = time.time()
+    # print(t3 - t2)
     # b = '2020-10-01 00:00:00'
     # e = '2020-10-02 00:00:00'
     #
@@ -2255,3 +2255,7 @@ def get_river_map(request):
     }
 
     return HttpResponse(json.dumps(Data), content_type='application/json')
+
+
+def get_msv_map(request):
+    return 'ok'

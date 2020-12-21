@@ -28,6 +28,7 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['127.0.0.1', '::1', 'localhost']
 
+
 # APP相关配置
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -36,14 +37,14 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    # 'corsheaders',
+    'corsheaders',
 ]
 
 # 不管
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    # 'corsheaders.middleware.CorsMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     # 'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -71,7 +72,7 @@ TEMPLATES = [
     },
 ]
 
-# WSGI_APPLICATION = 'vcs_django.wsgi.application'
+WSGI_APPLICATION = 'vcs_django.wsgi.application'
 
 
 # Database
@@ -86,7 +87,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.mysql',
         'NAME': 'vcs',
         'USER': 'root',
-        'PASSWORD': 'password',
+        'PASSWORD': 'azaqwsx123',
         'HOST': '127.0.0.1',
         'PORT': '3306'
     }
