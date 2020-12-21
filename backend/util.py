@@ -434,6 +434,14 @@ def generate_opcode_tree(opcode_csv):
     return another_tree
 
 
+# 推荐ecs
+def is_near_choose_ecs(region1, region2):
+    region1_index = int(region1.split('-')[2])
+    region2_index = int(region2.split('-')[2])
+    if region1_index == region2_index or region2_index == region1_index - 1 or region2_index == region1_index + 1 or region2_index == region1_index - 6 or region2_index == region1_index + 6:
+        return True
+    else:
+        return False
 
 # def change_file(file):
 #     if file['categories'] == '' and file['subtype'] == '':
