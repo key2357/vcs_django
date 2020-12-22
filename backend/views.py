@@ -565,8 +565,8 @@ def get_overview(request):
     file_filter = params['fileFilter']
 
     # time_slice = {
-    #     'beginTime': 0.58,
-    #     'endTime': 0.6
+    #     'beginTime': 0.9110915492957746,
+    #     'endTime': 1
     # }
     #
     # file_filter = {
@@ -606,31 +606,20 @@ def get_overview(request):
                 time_index / time_slice_num)
         end_time_number = time_slice['beginTime'] + (time_slice['endTime'] - time_slice['beginTime']) * (
                 (time_index + 1) / time_slice_num)
+        print(begin_time_number)
+        print(end_time_number)
         # 时间片或文件过滤为空的逻辑，以确定where_str
-        if has_filter and time_slice:
+        if has_filter:
             begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
             malware_type_list = file_filter['malwareType']
             malware_subtype_list = file_filter['malwareSubtype']
             malware_filetype_list = file_filter['fileType']
             where_str = get_file_and_time_where_str(malware_type_list, malware_subtype_list, malware_filetype_list,
                                                     begin_time_str, end_time_str)
-        elif has_filter:
-            begin_time_number = 0
-            end_time_number = 1
-            begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
-            malware_type_list = file_filter['malwareType']
-            malware_subtype_list = file_filter['malwareSubtype']
-            malware_filetype_list = file_filter['fileType']
-            where_str = get_file_and_time_where_str(malware_type_list, malware_subtype_list, malware_filetype_list,
-                                                    begin_time_str, end_time_str)
-        elif time_slice:
+
+        else:
             begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
             where_str = get_time_where_str(begin_time_str, end_time_str)
-        else:
-            begin_time_number = 0
-            end_time_number = 1
-            begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
-            where_str = ''
 
         # overview pattern
         cursor = connection.cursor()
@@ -683,6 +672,8 @@ def get_overview(request):
                 'time_num': this_number,
                 'file_num': ar['malwareNumber']
             })
+
+        time_data_file_num = sorted(time_data_file_num, key=lambda value: value['time_num'])
 
         time_data = {
             'time_T': 'T' + str(time_index),
