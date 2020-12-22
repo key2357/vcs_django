@@ -35,5 +35,6 @@ urlpatterns = [
     path('getEcsTableInfo/', views.get_ecs_table_info),
     path('getRiverMap/', views.get_river_map),
     path('getSimilarEcs/', views.get_similar_ecs),
+    path('getECSForcePlaying/', views.get_ecs_force_playing),
 
 ]

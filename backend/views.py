@@ -888,38 +888,255 @@ def get_force(request):
     return HttpResponse(json.dumps(ReturnData), content_type='application/json')
 
 
-# 第二个界面 态势等级视图
-# 态势等级视图 获取每个ECS的信息（包括ECS_ID、态势等级、聚类结果、半径、态势值、是否高危、是否高亮、文件信息）
-def get_ecs_force(request):
+# 态势等级视图 播放模式
+def get_ecs_force_playing(request):
     params = json.loads(request.body)
     time_slice = params['slice']
-    file_filter = params['fileFilter']
     file = params['file']
-    score_argv = params['score']
-
-    # score_argv = {
-    #     'alpha': 0.5,
-    #     'beta': 0.5,
-    #     'theta': 0.5,
-    #     'gamma': 0.5
-    # }
-    #
     # time_slice = {
-    #     'beginTime': 0.58,
-    #     'endTime': 0.6,
-    #     'isPlay': True
-    # }
-    #
-    # file_filter = {
-    #     'malwareType': [],
-    #     'malwareSubtype': [],
-    #     'fileType': []
+    #     'beginTime': 0.01,
+    #     'endTime': 0.02,
     # }
     #
     # file = {
     #     'categories': '',
     #     'subtype': ''
     # }
+
+    begin_time_number = time_slice['beginTime']
+    end_time_number = time_slice['endTime']
+    begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
+    where_str = get_time_where_str(begin_time_str, end_time_str)
+
+    cursor = connection.cursor()
+    cursor.execute(
+        "select uuid as i, count(malware_type) as malwareNumber, "
+        "sum(case when file_type='WEBSHELL' then 1 else 0 end) as file_WEBSHELL, "
+        "sum(case when file_type='BIN' then 1 else 0 end) as BIN, "
+        "sum(case when file_type='SCRIPT' then 1 else 0 end) as SCRIPT "
+        "from malware_base_info " + where_str + " group by uuid")
+
+    desc = cursor.description
+    all_data = cursor.fetchall()
+    all_ecs_force_and_file = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+
+    # 生成ecs_force_and_file
+    ecs_force_and_file = []
+    for ae in all_ecs_force_and_file:
+        ecs_force_and_file.append({
+            'i': ae['i']
+        })
+
+    time_ecs_set = set()
+    # 添加cur和pre
+    for ef in ecs_force_and_file:
+        ef['c'] = True
+        ef['p'] = False
+        time_ecs_set.add(ef['i'])
+
+    # 计算file_data
+    file_data = {
+        'malwareNumber': 0,
+        'webshellNumber': 0,
+        'biNumber': 0,
+        'scriptNumber': 0
+    }
+
+    for ae in all_ecs_force_and_file:
+        file_data['malwareNumber'] += ae['malwareNumber']
+        file_data['webshellNumber'] += ae['file_WEBSHELL']
+        file_data['biNumber'] += ae['BIN']
+        file_data['scriptNumber'] += ae['SCRIPT']
+
+    # 开启类别跟踪
+    is_out_of_time = False
+    if file['categories'] != '' and file['subtype'] != '':
+        # 修改time
+        time_length = end_time_number - begin_time_number
+        new_begin_time_number = begin_time_number - time_length
+        new_end_time_number = begin_time_number
+        new_begin_time_str, new_end_time_str = get_time_str(new_begin_time_number, new_end_time_number)
+        if new_begin_time_number < 0:
+            is_out_of_time = True
+        else:
+            file_where_str = get_time_where_str(new_begin_time_str, new_end_time_str)
+            cursor = connection.cursor()
+            cursor.execute(
+                "select uuid as i from malware_base_info " + file_where_str + " group by uuid")
+            desc = cursor.description
+            all_data = cursor.fetchall()
+            last_time_ecs = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+
+            for lte in last_time_ecs:
+                if lte['i'] not in time_ecs_set:
+                    ecs_force_and_file.append({
+                        'i': lte['i'],
+                        'c': False,
+                        'p': True
+                    })
+                    time_ecs_set.add(lte['i'])
+                else:
+                    for ef in ecs_force_and_file:
+                        if ef['i'] == lte['i']:
+                            ef['p'] = True
+
+    # 再取出所有的ECS
+    cursor.execute("select ECS_ID as i, AS_ID, VPC_ID, Region_ID, pattern from user_netstate_info")
+    desc = cursor.description
+    all_data = cursor.fetchall()
+    all_ecs = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+    for a in all_ecs:
+        if a['i'] not in time_ecs_set:
+            ecs_force_and_file.append({
+                'i': a['i'],
+                'c': False,
+                'p': False
+            })
+
+    # 做uuid_dict
+    uuid_dict = {}
+    for ae in all_ecs:
+        if ae['pattern'] == 'multi-az':
+            rank = 0
+        elif ae['pattern'] == 'flower':
+            rank = 1
+        elif ae['pattern'] == 'chain':
+            rank = 2
+        else:
+            rank = 3
+
+        uuid_dict[ae['i']] = {
+            'ECS_ID': ae['i'],
+            'AS_ID': ae['AS_ID'],
+            'VPC_ID': ae['VPC_ID'],
+            'Region_ID': ae['Region_ID'],
+            'pattern': rank
+        }
+
+    ecs_force_and_file = sorted(ecs_force_and_file, key=lambda value: value['i'])
+    region_list = []
+    # 改 从大到小嵌套
+    for d in ecs_force_and_file:
+        has_region = False
+        before_region = {}
+        dd = uuid_dict[d['i']]
+        for region in region_list:
+            if dd['Region_ID'] == region['i']:
+                has_region = True
+                before_region = region
+        if has_region:
+            has_vpc = False
+            before_vpc = {}
+            for vpc in before_region['v']:
+                if dd['VPC_ID'] == vpc['i']:
+                    has_vpc = True
+                    before_vpc = vpc
+
+            if has_vpc:
+                has_az = False
+                before_az = {}
+                for az in before_vpc['a']:
+                    if dd['AS_ID'] == az['i']:
+                        has_az = True
+                        before_az = az
+                if has_az:
+                    before_az['e'].append(d)
+                else:
+                    before_vpc['a'].append({
+                        'i': dd['AS_ID'],
+                        'e': []
+                    })
+
+                    az = before_vpc['a'][len(before_vpc['a']) - 1]
+                    az['e'].append(d)
+
+            else:
+                before_region['v'].append({
+                    'i': dd['VPC_ID'],
+                    'h': False,
+                    'r': dd['pattern'],
+                    'a': [],
+                })
+
+                vpc = before_region['v'][len(before_region['v']) - 1]
+                vpc['a'].append({
+                    'i': dd['AS_ID'],
+                    'e': [],
+                })
+
+                az = vpc['a'][len(vpc['a']) - 1]
+                az['e'].append(d)
+        else:
+            region_list.append({
+                'i': dd['Region_ID'],
+                'v': [],
+            })
+            region = region_list[len(region_list) - 1]
+            region['v'].append({
+                'i': dd['VPC_ID'],
+                'h': False,
+                'r': dd['pattern'],
+                'a': [],
+            })
+
+            vpc = region['v'][len(region['v']) - 1]
+            vpc['a'].append({
+                'i': dd['AS_ID'],
+                'e': [],
+            })
+
+            az = vpc['a'][len(vpc['a']) - 1]
+            az['e'].append(d)
+
+    allData = region_list
+
+    ReturnData = {
+        'timeStamp': begin_time_number,
+        'totalValue':  int(str(file_data['malwareNumber'])),
+        'allData': allData,
+        'files': {
+            'malwareNumber': int(str(file_data['malwareNumber'])),
+            'webshellNumber': int(str(file_data['webshellNumber'])),
+            'biNumber': int(str(file_data['biNumber'])),
+            'scriptNumber': int(str(file_data['scriptNumber'])),
+        }
+    }
+
+    return HttpResponse(json.dumps(ReturnData), content_type='application/json')
+
+
+# 第二个界面 态势等级视图
+# 态势等级视图 获取每个ECS的信息（包括ECS_ID、态势等级、聚类结果、半径、态势值、是否高危、是否高亮、文件信息）
+def get_ecs_force(request):
+    # params = json.loads(request.body)
+    # time_slice = params['slice']
+    # file_filter = params['fileFilter']
+    # file = params['file']
+    # score_argv = params['score']
+
+    score_argv = {
+        'alpha': 0.5,
+        'beta': 0.5,
+        'theta': 0.5,
+        'gamma': 0.5
+    }
+
+    time_slice = {
+        'beginTime': 0.01,
+        'endTime': 0.02,
+        'isPlay': False
+    }
+
+    file_filter = {
+        'malwareType': [],
+        'malwareSubtype': [],
+        'fileType': []
+    }
+
+    file = {
+        'categories': '',
+        'subtype': ''
+    }
 
     is_play = time_slice['isPlay']
 
@@ -1293,137 +1510,136 @@ def get_ecs_force(request):
     allData = region_list
 
     # allData 里面每个vpc进行组间排序
-    if not is_play:
-        for i in range(len(allData)):
-            multi_az_vpc = []
-            flower = []
-            chain = []
-            only_ecs = []
-            max_info = [0, 0, 0, 0]  # 用于标准化
-            # multi-az
-            for vpc in allData[i]['Region_VPC']:
-                if vpc['AS_NUM'] > 1 and vpc['ECS_NUM'] > 1 and vpc['VPC_ID'] != '':
-                    # 计算vpc的得分
-                    score_info, max_info = get_vpc_score_info(vpc, max_info)
-                    vpc['score_info'] = score_info
-                    vpc['rank'] = 0
-                    multi_az_vpc.append(vpc)
+    for i in range(len(allData)):
+        multi_az_vpc = []
+        flower = []
+        chain = []
+        only_ecs = []
+        max_info = [0, 0, 0, 0]  # 用于标准化
+        # multi-az
+        for vpc in allData[i]['Region_VPC']:
+            if vpc['AS_NUM'] > 1 and vpc['ECS_NUM'] > 1 and vpc['VPC_ID'] != '':
+                # 计算vpc的得分
+                score_info, max_info = get_vpc_score_info(vpc, max_info)
+                vpc['score_info'] = score_info
+                vpc['rank'] = 0
+                multi_az_vpc.append(vpc)
 
-            score_max_length = 0
-            score_info_index = 0
-            # 做标准化
-            for mi in range(len(multi_az_vpc)):
-                multi_az_vpc[mi]['score'] = get_vpc_score(multi_az_vpc[mi]['score_info'], alpha, beta, theta, gamma,
-                                                          max_info)
-                if mi != 0:
-                    score_length = multi_az_vpc[mi - 1]['score'] - multi_az_vpc[mi]['score']
-                    if score_length > score_max_length:
-                        score_info_index = mi
-                        score_max_length = score_length
+        score_max_length = 0
+        score_info_index = 0
+        # 做标准化
+        for mi in range(len(multi_az_vpc)):
+            multi_az_vpc[mi]['score'] = get_vpc_score(multi_az_vpc[mi]['score_info'], alpha, beta, theta, gamma,
+                                                      max_info)
+            if mi != 0:
+                score_length = multi_az_vpc[mi - 1]['score'] - multi_az_vpc[mi]['score']
+                if score_length > score_max_length:
+                    score_info_index = mi
+                    score_max_length = score_length
 
-            # 是否隐藏
-            for mi in range(len(multi_az_vpc)):
-                if mi == 0:
-                    multi_az_vpc[mi]['isHide'] = False
-                elif mi < score_info_index:
-                    multi_az_vpc[mi]['isHide'] = False
-                else:
-                    multi_az_vpc[mi]['isHide'] = True
+        # 是否隐藏
+        for mi in range(len(multi_az_vpc)):
+            if mi == 0:
+                multi_az_vpc[mi]['isHide'] = False
+            elif mi < score_info_index:
+                multi_az_vpc[mi]['isHide'] = False
+            else:
+                multi_az_vpc[mi]['isHide'] = True
 
-            # flower
-            for vpc in allData[i]['Region_VPC']:
-                if vpc['AS_NUM'] == 1 and vpc['ECS_NUM'] > 1 and vpc['VPC_ID'] != '':
-                    # 计算vpc的得分
-                    score_info, max_info = get_vpc_score_info(vpc, max_info)
-                    vpc['score_info'] = score_info
-                    vpc['rank'] = 1
-                    flower.append(vpc)
+        # flower
+        for vpc in allData[i]['Region_VPC']:
+            if vpc['AS_NUM'] == 1 and vpc['ECS_NUM'] > 1 and vpc['VPC_ID'] != '':
+                # 计算vpc的得分
+                score_info, max_info = get_vpc_score_info(vpc, max_info)
+                vpc['score_info'] = score_info
+                vpc['rank'] = 1
+                flower.append(vpc)
 
-            score_max_length = 0
-            score_info_index = 0
-            # 做标准化
-            for mi in range(len(flower)):
-                flower[mi]['score'] = get_vpc_score(flower[mi]['score_info'], alpha, beta, theta, gamma, max_info)
-                if mi != 0:
-                    score_length = flower[mi - 1]['score'] - flower[mi]['score']
-                    if score_length > score_max_length:
-                        score_info_index = mi
-                        score_max_length = score_length
+        score_max_length = 0
+        score_info_index = 0
+        # 做标准化
+        for mi in range(len(flower)):
+            flower[mi]['score'] = get_vpc_score(flower[mi]['score_info'], alpha, beta, theta, gamma, max_info)
+            if mi != 0:
+                score_length = flower[mi - 1]['score'] - flower[mi]['score']
+                if score_length > score_max_length:
+                    score_info_index = mi
+                    score_max_length = score_length
 
-            # 是否隐藏
-            for mi in range(len(flower)):
-                if mi == 0:
-                    flower[mi]['isHide'] = False
-                elif mi < score_info_index:
-                    flower[mi]['isHide'] = False
-                else:
-                    flower[mi]['isHide'] = True
+        # 是否隐藏
+        for mi in range(len(flower)):
+            if mi == 0:
+                flower[mi]['isHide'] = False
+            elif mi < score_info_index:
+                flower[mi]['isHide'] = False
+            else:
+                flower[mi]['isHide'] = True
 
-            # chain
-            for vpc in allData[i]['Region_VPC']:
-                if vpc['AS_NUM'] == 1 and vpc['ECS_NUM'] == 1 and vpc['VPC_ID'] != '':
-                    # 计算vpc的得分
-                    score_info, max_info = get_vpc_score_info(vpc, max_info)
-                    vpc['score_info'] = score_info
-                    vpc['rank'] = 2
-                    chain.append(vpc)
+        # chain
+        for vpc in allData[i]['Region_VPC']:
+            if vpc['AS_NUM'] == 1 and vpc['ECS_NUM'] == 1 and vpc['VPC_ID'] != '':
+                # 计算vpc的得分
+                score_info, max_info = get_vpc_score_info(vpc, max_info)
+                vpc['score_info'] = score_info
+                vpc['rank'] = 2
+                chain.append(vpc)
 
-            score_max_length = 0
-            score_info_index = 0
-            # 做标准化
-            for mi in range(len(chain)):
-                chain[mi]['score'] = get_vpc_score(chain[mi]['score_info'], alpha, beta, theta, gamma, max_info)
-                if mi != 0:
-                    score_length = chain[mi - 1]['score'] - chain[mi]['score']
-                    if score_length > score_max_length:
-                        score_info_index = mi
-                        score_max_length = score_length
+        score_max_length = 0
+        score_info_index = 0
+        # 做标准化
+        for mi in range(len(chain)):
+            chain[mi]['score'] = get_vpc_score(chain[mi]['score_info'], alpha, beta, theta, gamma, max_info)
+            if mi != 0:
+                score_length = chain[mi - 1]['score'] - chain[mi]['score']
+                if score_length > score_max_length:
+                    score_info_index = mi
+                    score_max_length = score_length
 
-            # 是否隐藏
-            for mi in range(len(chain)):
-                if mi == 0:
-                    chain[mi]['isHide'] = False
-                elif mi < score_info_index:
-                    chain[mi]['isHide'] = False
-                else:
-                    chain[mi]['isHide'] = True
+        # 是否隐藏
+        for mi in range(len(chain)):
+            if mi == 0:
+                chain[mi]['isHide'] = False
+            elif mi < score_info_index:
+                chain[mi]['isHide'] = False
+            else:
+                chain[mi]['isHide'] = True
 
-            # only-ecs
-            as_ecs_type = []
-            for ecs in ecs_specific_info_list:
-                if ecs['VPC_ID'] == "" and ecs['Region_ID'] == allData[i]['Region_ID']:
-                    as_ecs_type.append(ecs)
-            if as_ecs_type:
-                only_ecs.append({
-                    'VPC_ID': '',
-                    'score': 0,
-                    'score_info': [0, 0, 0, 0],
-                    'rank': 3,
-                    'isHide': False,
-                    'AS_ECS':
-                        [{
-                            'AS_ID': '',
-                            'AS_ECS_TYPE': as_ecs_type
-                        }]
-                })
+        # only-ecs
+        as_ecs_type = []
+        for ecs in ecs_specific_info_list:
+            if ecs['VPC_ID'] == "" and ecs['Region_ID'] == allData[i]['Region_ID']:
+                as_ecs_type.append(ecs)
+        if as_ecs_type:
+            only_ecs.append({
+                'VPC_ID': '',
+                'score': 0,
+                'score_info': [0, 0, 0, 0],
+                'rank': 3,
+                'isHide': False,
+                'AS_ECS':
+                    [{
+                        'AS_ID': '',
+                        'AS_ECS_TYPE': as_ecs_type
+                    }]
+            })
 
-            region = []
-            # 根据score排序
-            multi_az_vpc = sorted(multi_az_vpc, key=lambda value: value['score'], reverse=1)
-            flower = sorted(flower, key=lambda value: value['score'], reverse=1)
-            chain = sorted(chain, key=lambda value: value['score'], reverse=1)
-            only_ecs = sorted(only_ecs, key=lambda value: value['score'], reverse=1)
+        region = []
+        # 根据score排序
+        multi_az_vpc = sorted(multi_az_vpc, key=lambda value: value['score'], reverse=1)
+        flower = sorted(flower, key=lambda value: value['score'], reverse=1)
+        chain = sorted(chain, key=lambda value: value['score'], reverse=1)
+        only_ecs = sorted(only_ecs, key=lambda value: value['score'], reverse=1)
 
-            for mav in multi_az_vpc:
-                region.append(mav)
-            for fl in flower:
-                region.append(fl)
-            for ch in chain:
-                region.append(ch)
-            for oe in only_ecs:
-                region.append(oe)
+        for mav in multi_az_vpc:
+            region.append(mav)
+        for fl in flower:
+            region.append(fl)
+        for ch in chain:
+            region.append(ch)
+        for oe in only_ecs:
+            region.append(oe)
 
-            allData[i]['Region_VPC'] = region
+        allData[i]['Region_VPC'] = region
 
     ReturnData = {
         'timeStamp': begin_time_number,
