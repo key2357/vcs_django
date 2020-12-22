@@ -2,7 +2,7 @@ from django.http import HttpResponse
 from django.db import connection
 from backend.util import get_file_where_str, get_file_and_time_where_str, get_time_str, get_time_where_str, \
     get_slice_where_str, get_timestamp, has_filter_func, get_vpc_score_info, get_vpc_score, get_time_str_by_time_type, \
-    generate_opcode_csv, generate_opcode_tree, is_near_choose_ecs
+    generate_opcode_csv, generate_opcode_tree, is_near_choose_ecs, get_stamp_where_str
 from vcs_django.settings import BASE_DIR
 from backend.config import MALWARE_SUBTYPE, FINAL_TIME, INIT_TIME, REGION_LIST
 import pandas as pd
@@ -1752,7 +1752,7 @@ def get_force_graph_by_time(request):
 
     # slice = {
     #     'beginTime': 0,
-    #     'endTime': 1
+    #     'endTime': 0.1
     # }
     #
     # file_filter = {
@@ -1762,18 +1762,13 @@ def get_force_graph_by_time(request):
     # }
 
     # 时间片为空的逻辑，以确定where_str
-    if slice:
-        begin_time_number = slice['beginTime']
-        end_time_number = slice['endTime']
-        begin_timestamp, end_timestamp = get_timestamp(begin_time_number, end_time_number)
-        where_str = get_slice_where_str(begin_timestamp, end_timestamp)
-    else:
-        begin_time_number = 0
-        where_str = ''
+    begin_time_number = slice['beginTime']
+    end_time_number = slice['endTime']
+    begin_stamp, end_stamp = get_timestamp(begin_time_number, end_time_number)
+    where_str = get_stamp_where_str(begin_stamp, end_stamp)
 
     cursor = connection.cursor()
-    cursor.execute(
-        "select `source_file_md5` as source, target_file_md5 as target, similarity_value as similarity from similarity_info " + where_str)
+    cursor.execute("select `source`, target, similarity from similarity_info " + where_str)
     desc = cursor.description
     all_data = cursor.fetchall()
     row_data = [dict(zip([col[0] for col in desc], row)) for row in all_data]
@@ -2015,17 +2010,18 @@ def get_opcode_overview(request):
         "children": []
     }
 
+    # 读取file_detail_info
+    with open(str(BASE_DIR) + '//backend//data//file_detail_info.json', 'r', encoding='utf8')as fp:
+        file_detail_info = json.load(fp)
+
     min_file_num_r = 1000000
     max_file_num_r = 0
     min_file_num_p = 1000000
     max_file_num_p = 0
     # 将时间片分为几份
-    countcccc = 0
     time_slice_num = 14
     for time_index in range(time_slice_num):
-        countcccc += 1
-        print(countcccc)
-        t0 = time.time()
+        print('a')
         begin_time_number = time_slice['beginTime'] + (time_slice['endTime'] - time_slice['beginTime']) * (
                 time_index / time_slice_num)
         end_time_number = time_slice['beginTime'] + (time_slice['endTime'] - time_slice['beginTime']) * (
@@ -2099,16 +2095,19 @@ def get_opcode_overview(request):
         # 计算聚类
         cursor = connection.cursor()
         cursor.execute(
-            "select source_uuid, source_file_md5, target_uuid, target_file_md5 from similarity_info where source_create_time > '{0}' and source_create_time  < '{1}' and target_create_time > '{0}' and target_create_time < '{1}'".format(
+            "select `source` as source_file_md5, target as target_file_md5 from similarity_info where source_create_time > '{0}' and source_create_time  < '{1}' and target_create_time > '{0}' and target_create_time < '{1}'".format(
                 old_begin_time_stamp, old_end_time_stamp, old_begin_time_stamp, old_end_time_stamp))
         desc = cursor.description
         all_data = cursor.fetchall()
         edge_info = [dict(zip([col[0] for col in desc], row)) for row in all_data]
-        t3 = time.time()
+
+        for i in range(len(edge_info)):
+            edge_info[i]['source_uuid'] = file_detail_info[edge_info[i]['source_file_md5']]['ESC_ID']
+            edge_info[i]['target_uuid'] = file_detail_info[edge_info[i]['target_file_md5']]['ESC_ID']
+
         # 先读取节点编码
         # with open(str(BASE_DIR) + '//similarity//uuid_md5_base_reverse.json', 'r', encoding='utf8') as fp:
         #     uuid_md5_base_reverse = json.load(fp)
-        """explain select source_uuid, source_file_md5, target_uuid, target_file_md5 from similarity_info where source_create_time > '0' and source_create_time  < '10' and target_create_time > '0' and target_create_time < '10'"""
         node_info_set = set()
         link_info_set = set()
         link_info = set()
@@ -2549,109 +2548,105 @@ def get_similar_ecs(request):
 
 
 # 河流图
-def get_river_map(request):
-    # 先读取节点编码
-    with open(str(BASE_DIR) + '//similarity//uuid_md5_base_reverse.json', 'r', encoding='utf8') as fp:
-        uuid_md5_base_reverse = json.load(fp)
-
-    # 时间粒度
-    now_stamp = INIT_TIME
-    time_slice_length = 86400
-
-    file_num_all = []
-    cluster_num_all = []
-
-    max_cluster_num = 0
-    max_file_num = 0
-
-    while now_stamp < FINAL_TIME:
-        this_begin_time_stamp = now_stamp
-        this_end_time_stamp = this_begin_time_stamp + time_slice_length
-
-        begin_time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(this_begin_time_stamp))
-        end_time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(this_end_time_stamp))
-        where_str = get_time_where_str(begin_time_str, end_time_str)
-
-        t0 = time.time()
-        # 查文件数量
-        cursor = connection.cursor()
-        cursor.execute(
-            "select uuid, malware_md5 from malware_base_info " + where_str)
-        desc = cursor.description
-        all_data = cursor.fetchall()
-        river_map_file_num = [dict(zip([col[0] for col in desc], row)) for row in all_data]
-
-        file_num_all.append({
-            'time_str': begin_time_str,
-            'file_num': len(river_map_file_num)
-        })
-
-        if len(river_map_file_num) > max_file_num:
-            max_file_num = len(river_map_file_num)
-
-        # 计算聚类
-        cursor = connection.cursor()
-        cursor.execute(
-            "select source_uuid, source_file_md5, target_uuid, target_file_md5 from similarity_info where source_create_time > '{0}' and source_create_time  < '{1}' and target_create_time > '{0}' and target_create_time < '{1}'".format(
-                this_begin_time_stamp, this_end_time_stamp, this_begin_time_stamp, this_end_time_stamp))
-
-        desc = cursor.description
-        all_data = cursor.fetchall()
-        edge_info = [dict(zip([col[0] for col in desc], row)) for row in all_data]
-
-        if len(edge_info) < 3000000:
-            link_info = set()
-            for ei in edge_info:
-                source_uuid_md5 = ei['source_uuid'] + '|' + ei['source_file_md5']
-                source_base = 'n' + uuid_md5_base_reverse[source_uuid_md5]
-                target_uuid_md5 = ei['target_uuid'] + '|' + ei['target_file_md5']
-                target_base = 'n' + uuid_md5_base_reverse[target_uuid_md5]
-                link_info.add((source_base, target_base))
-
-            # 生成字典
-            link_dict = {}
-            for li in link_info:
-                if li[0] not in link_dict:
-                    link_dict[li[0]] = li[0]
-                if li[1] not in link_dict:
-                    link_dict[li[1]] = li[0]
-
-            for key in link_dict:
-                while link_dict[key] != key:
-                    link_dict[key] = link_dict[link_dict[key]]
-                    key = link_dict[key]
-
-            cluster_list_set = set()
-            for key in link_dict:
-                cluster_list_set.add(link_dict[key])
-
-            cluster_num_all.append({
-                'time_str': begin_time_str,
-                'cluster_num': len(cluster_list_set)
-            })
-            if len(cluster_list_set) > max_cluster_num:
-                max_cluster_num = len(cluster_list_set)
-        else:
-            cluster_num_all.append({
-                'time_str': begin_time_str,
-                'cluster_num': 'max'
-            })
-        now_stamp += time_slice_length
-
-    for cn in cluster_num_all:
-        if cn['cluster_num'] == 'max':
-            cn['cluster_num'] = max_cluster_num
-
-    Data = {
-        'name': 'all',
-        'max_file_num': max_file_num,
-        'max_cluster_num': max_cluster_num,
-        'file': file_num_all,
-        'cluster': cluster_num_all
-    }
-
-    return HttpResponse(json.dumps(Data), content_type='application/json')
-
-
-def get_msv_map(request):
-    return 'ok'
+# def get_river_map(request):
+#     # 先读取节点编码
+#     with open(str(BASE_DIR) + '//similarity//uuid_md5_base_reverse.json', 'r', encoding='utf8') as fp:
+#         uuid_md5_base_reverse = json.load(fp)
+#
+#     # 时间粒度
+#     now_stamp = INIT_TIME
+#     time_slice_length = 86400
+#
+#     file_num_all = []
+#     cluster_num_all = []
+#
+#     max_cluster_num = 0
+#     max_file_num = 0
+#
+#     while now_stamp < FINAL_TIME:
+#         this_begin_time_stamp = now_stamp
+#         this_end_time_stamp = this_begin_time_stamp + time_slice_length
+#
+#         begin_time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(this_begin_time_stamp))
+#         end_time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(this_end_time_stamp))
+#         where_str = get_time_where_str(begin_time_str, end_time_str)
+#
+#         t0 = time.time()
+#         # 查文件数量
+#         cursor = connection.cursor()
+#         cursor.execute(
+#             "select uuid, malware_md5 from malware_base_info " + where_str)
+#         desc = cursor.description
+#         all_data = cursor.fetchall()
+#         river_map_file_num = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+#
+#         file_num_all.append({
+#             'time_str': begin_time_str,
+#             'file_num': len(river_map_file_num)
+#         })
+#
+#         if len(river_map_file_num) > max_file_num:
+#             max_file_num = len(river_map_file_num)
+#
+#         # 计算聚类
+#         cursor = connection.cursor()
+#         cursor.execute(
+#             "select source_uuid, source_file_md5, target_uuid, target_file_md5 from similarity_info where source_create_time > '{0}' and source_create_time  < '{1}' and target_create_time > '{0}' and target_create_time < '{1}'".format(
+#                 this_begin_time_stamp, this_end_time_stamp, this_begin_time_stamp, this_end_time_stamp))
+#
+#         desc = cursor.description
+#         all_data = cursor.fetchall()
+#         edge_info = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+#
+#         if len(edge_info) < 3000000:
+#             link_info = set()
+#             for ei in edge_info:
+#                 source_uuid_md5 = ei['source_uuid'] + '|' + ei['source_file_md5']
+#                 source_base = 'n' + uuid_md5_base_reverse[source_uuid_md5]
+#                 target_uuid_md5 = ei['target_uuid'] + '|' + ei['target_file_md5']
+#                 target_base = 'n' + uuid_md5_base_reverse[target_uuid_md5]
+#                 link_info.add((source_base, target_base))
+#
+#             # 生成字典
+#             link_dict = {}
+#             for li in link_info:
+#                 if li[0] not in link_dict:
+#                     link_dict[li[0]] = li[0]
+#                 if li[1] not in link_dict:
+#                     link_dict[li[1]] = li[0]
+#
+#             for key in link_dict:
+#                 while link_dict[key] != key:
+#                     link_dict[key] = link_dict[link_dict[key]]
+#                     key = link_dict[key]
+#
+#             cluster_list_set = set()
+#             for key in link_dict:
+#                 cluster_list_set.add(link_dict[key])
+#
+#             cluster_num_all.append({
+#                 'time_str': begin_time_str,
+#                 'cluster_num': len(cluster_list_set)
+#             })
+#             if len(cluster_list_set) > max_cluster_num:
+#                 max_cluster_num = len(cluster_list_set)
+#         else:
+#             cluster_num_all.append({
+#                 'time_str': begin_time_str,
+#                 'cluster_num': 'max'
+#             })
+#         now_stamp += time_slice_length
+#
+#     for cn in cluster_num_all:
+#         if cn['cluster_num'] == 'max':
+#             cn['cluster_num'] = max_cluster_num
+#
+#     Data = {
+#         'name': 'all',
+#         'max_file_num': max_file_num,
+#         'max_cluster_num': max_cluster_num,
+#         'file': file_num_all,
+#         'cluster': cluster_num_all
+#     }
+#
+#     return HttpResponse(json.dumps(Data), content_type='application/json')

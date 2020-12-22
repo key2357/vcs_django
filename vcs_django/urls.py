@@ -33,7 +33,7 @@ urlpatterns = [
     path('getOpcodeOverview/', views.get_opcode_overview),
     path('getGantMap/', views.get_gant_map),
     path('getEcsTableInfo/', views.get_ecs_table_info),
-    path('getRiverMap/', views.get_river_map),
+    # path('getRiverMap/', views.get_river_map),
     path('getSimilarEcs/', views.get_similar_ecs),
     path('getECSForcePlaying/', views.get_ecs_force_playing),
 

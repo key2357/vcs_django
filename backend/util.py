@@ -80,6 +80,13 @@ def get_slice_where_str(begin_time_str, end_time_str):
     return where_str
 
 
+def get_stamp_where_str(begin_time_str, end_time_str):
+    where_str = 'where source_create_time > \'' + str(int(begin_time_str)) + '\' and source_create_time < \'' + str(int(
+        end_time_str)) + '\' and target_create_time > \'' + str(int(begin_time_str)) + '\' and target_create_time < \'' + str(int(
+        end_time_str)) + '\' '
+    return where_str
+
+
 def get_timestamp(begin_time_number, end_time_number):
     begin_timestamp = begin_time_number * (FINAL_TIME - INIT_TIME) + INIT_TIME
     end_timestamp = end_time_number * (FINAL_TIME - INIT_TIME) + INIT_TIME
