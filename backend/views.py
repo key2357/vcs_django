@@ -1665,25 +1665,26 @@ def get_opcode_tree_map(request):
     params = json.loads(request.body)
     params_uuid = params['uuid']
     params_file_md5 = params['file_md5']
+    tree_type = params['tree_type']   # 分为all_point stain
 
-    # params_uuid = '2786278ac90e43cac6fa717884c5a140'
-    # params_file_md5 = '00b0dfc7f918e5114e083f501ffbcdf3'
-
+    # params_uuid = '254b63c47e95bfa0cf08ae573d1cfcc0'
+    # params_file_md5 = '8132f2faae72c2a497b7f45a5e5af8eb'
+    # tree_type = 'stain'
     opcode_csv = generate_opcode_csv(params_uuid, params_file_md5)
-    opcode_tree = generate_opcode_tree(opcode_csv)
-    opcode_tree[0]['unique_id'] = params_uuid + params_file_md5
+    opcode_tree = generate_opcode_tree(opcode_csv, tree_type)
+
     return HttpResponse(json.dumps(opcode_tree), content_type='application/json')
 
 
 # 第三个界面 opcode的使用概览
 def get_opcode_overview(request):
-    params = json.loads(request.body)
-    time_slice = params['slice']
+    # params = json.loads(request.body)
+    # time_slice = params['slice']
 
-    # time_slice = {
-    #     'beginTime': 0,
-    #     'endTime': 1
-    # }
+    time_slice = {
+        'beginTime': 0,
+        'endTime': 1
+    }
 
     cursor = connection.cursor()
     cursor.execute("select ECS_ID, AS_ID, VPC_ID, Region_ID, pattern from user_netstate_info ")
