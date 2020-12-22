@@ -890,6 +890,8 @@ def get_ecs_force_playing(request):
     params = json.loads(request.body)
     time_slice = params['slice']
     file = params['file']
+    file_filter = params['fileFilter']
+
     # time_slice = {
     #     'beginTime': 0.01,
     #     'endTime': 0.02,
@@ -899,11 +901,31 @@ def get_ecs_force_playing(request):
     #     'categories': '',
     #     'subtype': ''
     # }
+    #
+    # file_filter = {
+    #     'malwareType': [],
+    #     'malwareSubtype': [],
+    #     'fileType': []
+    # }
 
-    begin_time_number = time_slice['beginTime']
-    end_time_number = time_slice['endTime']
-    begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
-    where_str = get_time_where_str(begin_time_str, end_time_str)
+    has_filter = has_filter_func(file_filter)
+
+    # 时间片或文件过滤为空的逻辑，以确定where_str
+    if has_filter:
+        begin_time_number = time_slice['beginTime']
+        end_time_number = time_slice['endTime']
+        begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
+        malware_type_list = file_filter['malwareType']
+        malware_subtype_list = file_filter['malwareSubtype']
+        malware_filetype_list = file_filter['fileType']
+        where_str = get_file_and_time_where_str(malware_type_list, malware_subtype_list, malware_filetype_list,
+                                                begin_time_str, end_time_str)
+
+    else:
+        begin_time_number = time_slice['beginTime']
+        end_time_number = time_slice['endTime']
+        begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
+        where_str = get_time_where_str(begin_time_str, end_time_str)
 
     cursor = connection.cursor()
     cursor.execute(
@@ -945,37 +967,46 @@ def get_ecs_force_playing(request):
         file_data['biNumber'] += ae['BIN']
         file_data['scriptNumber'] += ae['SCRIPT']
 
-    # 开启类别跟踪
-    is_out_of_time = False
-    if file['categories'] != '' and file['subtype'] != '':
-        # 修改time
-        time_length = end_time_number - begin_time_number
-        new_begin_time_number = begin_time_number - time_length
-        new_end_time_number = begin_time_number
-        new_begin_time_str, new_end_time_str = get_time_str(new_begin_time_number, new_end_time_number)
-        if new_begin_time_number < 0:
-            is_out_of_time = True
-        else:
-            file_where_str = get_time_where_str(new_begin_time_str, new_end_time_str)
-            cursor = connection.cursor()
-            cursor.execute(
-                "select uuid as i from malware_base_info " + file_where_str + " group by uuid")
-            desc = cursor.description
-            all_data = cursor.fetchall()
-            last_time_ecs = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+    # 类别跟踪
+    time_length = end_time_number - begin_time_number
+    new_begin_time_number = begin_time_number - time_length
+    new_end_time_number = begin_time_number
+    new_begin_time_str, new_end_time_str = get_time_str(new_begin_time_number, new_end_time_number)
+    if has_filter:
+        malware_type_list = file_filter['malwareType']
+        malware_subtype_list = file_filter['malwareSubtype']
+        malware_filetype_list = file_filter['fileType']
+        file_where_str = get_file_and_time_where_str(malware_type_list, malware_subtype_list, malware_filetype_list,
+                                                new_begin_time_str, new_end_time_str)
+    else:
+        begin_time_number = time_slice['beginTime']
+        end_time_number = time_slice['endTime']
+        begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
+        file_where_str = get_time_where_str(new_begin_time_str, new_end_time_str)
 
-            for lte in last_time_ecs:
-                if lte['i'] not in time_ecs_set:
-                    ecs_force_and_file.append({
-                        'i': lte['i'],
-                        'c': False,
-                        'p': True
-                    })
-                    time_ecs_set.add(lte['i'])
-                else:
-                    for ef in ecs_force_and_file:
-                        if ef['i'] == lte['i']:
-                            ef['p'] = True
+
+    if new_begin_time_number < 0:
+        is_out_of_time = True
+    else:
+        cursor = connection.cursor()
+        cursor.execute(
+            "select uuid as i from malware_base_info " + file_where_str + " group by uuid")
+        desc = cursor.description
+        all_data = cursor.fetchall()
+        last_time_ecs = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+
+        for lte in last_time_ecs:
+            if lte['i'] not in time_ecs_set:
+                ecs_force_and_file.append({
+                    'i': lte['i'],
+                    'c': False,
+                    'p': True
+                })
+                time_ecs_set.add(lte['i'])
+            else:
+                for ef in ecs_force_and_file:
+                    if ef['i'] == lte['i']:
+                        ef['p'] = True
 
     # 再取出所有的ECS
     cursor.execute("select ECS_ID as i, AS_ID, VPC_ID, Region_ID, pattern from user_netstate_info")
@@ -1875,14 +1906,14 @@ def get_force_graph_by_time(request):
 
 # 第三个界面 层次树
 def get_opcode_tree_map(request):
-    params = json.loads(request.body)
-    params_uuid = params['uuid']
-    params_file_md5 = params['file_md5']
-    tree_type = params['tree_type']   # 分为all_point stain
+    # params = json.loads(request.body)
+    # params_uuid = params['uuid']
+    # params_file_md5 = params['file_md5']
+    # tree_type = params['stain']   # 分为all_point stain
 
-    # params_uuid = 'ee1fee335005711d3009b10758e14301'
-    # params_file_md5 = 'd8b9d2db73001d7f6195313648db5994'
-    tree_type = 'all_point'
+    params_uuid = '177d4565891a3128d823f2f965aa0318'
+    params_file_md5 = '156885b60740a9e7869b4f706f1ee408'
+    tree_type = 'stain'
     opcode_csv = generate_opcode_csv(params_uuid, params_file_md5)
     opcode_tree = generate_opcode_tree(opcode_csv, tree_type)
 
