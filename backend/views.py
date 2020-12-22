@@ -1906,14 +1906,14 @@ def get_force_graph_by_time(request):
 
 # 第三个界面 层次树
 def get_opcode_tree_map(request):
-    # params = json.loads(request.body)
-    # params_uuid = params['uuid']
-    # params_file_md5 = params['file_md5']
-    # tree_type = params['stain']   # 分为all_point stain
+    params = json.loads(request.body)
+    params_uuid = params['uuid']
+    params_file_md5 = params['file_md5']
+    tree_type = params['stain']   # 分为all_point stain
 
-    params_uuid = '177d4565891a3128d823f2f965aa0318'
-    params_file_md5 = '156885b60740a9e7869b4f706f1ee408'
-    tree_type = 'stain'
+    # params_uuid = '177d4565891a3128d823f2f965aa0318'
+    # params_file_md5 = 'b14ab3c740aae4d5bc0d2724ce89f786'
+    # tree_type = 'all_point'
     opcode_csv = generate_opcode_csv(params_uuid, params_file_md5)
     opcode_tree = generate_opcode_tree(opcode_csv, tree_type)
 
@@ -1927,7 +1927,7 @@ def get_opcode_overview(request):
 
     time_slice = {
         'beginTime': 0,
-        'endTime': 1
+        'endTime': 0.5
     }
 
     cursor = connection.cursor()
@@ -1955,6 +1955,10 @@ def get_opcode_overview(request):
         "children": []
     }
 
+    min_file_num_r = 1000000
+    max_file_num_r = 0
+    min_file_num_p = 1000000
+    max_file_num_p = 0
     # 将时间片分为几份
     countcccc = 0
     time_slice_num = 14
@@ -2031,7 +2035,7 @@ def get_opcode_overview(request):
                 max_file_num_r = rfn['file_num']
             if rfn['file_num'] < min_file_num_r and rfn['file_num'] != 0:
                 min_file_num_r = rfn['file_num']
-        t2 = time.time()
+
         # 计算聚类
         cursor = connection.cursor()
         cursor.execute(
