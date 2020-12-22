@@ -475,14 +475,13 @@ def generate_opcode_tree(opcode_csv, tree_type):
             "unique_id": another_tree[0]['unique_id'],
             "children": []
         }
-        another_tree = generate_stain_tree(another_tree[0]['children'], stack_dynamic, stain_tree)
+        another_tree = [generate_stain_tree(another_tree[0]['children'], stack_dynamic, stain_tree)]
 
     return another_tree
 
 
 # 生成污点树
 def generate_stain_tree(tree, stack_dynamic, stain_tree):
-    print('begin')
     for c in tree:
         print(c)
         dynamic = c['dynamic']
