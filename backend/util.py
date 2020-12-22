@@ -179,7 +179,10 @@ def generate_opcode_csv(uuid, file_md5):
 
     # 将index int化
     for ef in ecs_force_and_file:
-        ef['index'] = int(ef['index'])
+        if ef['index']:
+            ef['index'] = int(ef['index'])
+        else:
+            ef['index'] = -1
 
     # 按index排序
     ecs_force_and_file = sorted(ecs_force_and_file, key=lambda value: value['index'], reverse=True)
@@ -206,7 +209,10 @@ def generate_opcode_csv(uuid, file_md5):
         dynamic_array = dynamic[1:len(dynamic) - 1].split(',')
         dynamic_handle = []
         dynamic_index = []
-        argc = int(e['argc'])
+        if e['argc']:
+            argc = int(e['argc'])
+        else:
+            argc = 0
 
         # 查看是否为敏感函数
         if e['name'] in sensitive_set:

@@ -20,6 +20,14 @@ import networkx as nx
 
 
 def test(request):
+    # cursor = connection.cursor()
+    # cursor.execute(
+    #     "select source_uuid, source_file_md5, target_uuid, target_file_md5 from similarity where source_create_time > '{0}' and source_create_time  < '{1}' and target_create_time > '{0}' and source_create_time < '{1}'".format(
+    #         old_begin_time_stamp, old_end_time_stamp, old_begin_time_stamp, old_end_time_stamp))
+    # desc = cursor.description
+    # all_data = cursor.fetchall()
+    # edge_info = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+
     # t2 = time.time()
     # # 计算聚类
     # cursor = connection.cursor()
@@ -560,20 +568,20 @@ def get_space_tree_map(request):
 # 第一个界面 时空概览
 # UI-v2 view1 时空概览之4个模式
 def get_overview(request):
-    params = json.loads(request.body)
-    time_slice = params['slice']
-    file_filter = params['fileFilter']
+    # params = json.loads(request.body)
+    # time_slice = params['slice']
+    # file_filter = params['fileFilter']
 
-    # time_slice = {
-    #     'beginTime': 0.9110915492957746,
-    #     'endTime': 1
-    # }
-    #
-    # file_filter = {
-    #     'malwareType': ['网站后门', '恶意进程'],
-    #     'malwareSubtype': ['WEBSHELL', '挖矿程序'],
-    #     'fileType': ['BIN', 'WEBSHELL']
-    # }
+    time_slice = {
+        'beginTime': 0.9110915492957746,
+        'endTime': 1
+    }
+
+    file_filter = {
+        'malwareType': [],
+        'malwareSubtype': ['自变异木马'],
+        'fileType': []
+    }
 
     has_filter = has_filter_func(file_filter)
 
@@ -606,8 +614,7 @@ def get_overview(request):
                 time_index / time_slice_num)
         end_time_number = time_slice['beginTime'] + (time_slice['endTime'] - time_slice['beginTime']) * (
                 (time_index + 1) / time_slice_num)
-        print(begin_time_number)
-        print(end_time_number)
+
         # 时间片或文件过滤为空的逻辑，以确定where_str
         if has_filter:
             begin_time_str, end_time_str = get_time_str(begin_time_number, end_time_number)
@@ -645,7 +652,6 @@ def get_overview(request):
         overview_pattern = [dict(zip([col[0] for col in desc], row)) for row in all_data]
 
         # 获取所有region下的文件数量 聚合成小时
-
         begin_datatime = datetime.datetime.strptime(begin_time_str, "%Y-%m-%d %H:%M:%S")
         end_datatime = datetime.datetime.strptime(end_time_str, "%Y-%m-%d %H:%M:%S")
         new_begin_time_str = begin_datatime.strftime("%Y-%m-%d %H") + ":00:00"
@@ -656,13 +662,13 @@ def get_overview(request):
 
         cursor = connection.cursor()
         cursor.execute("select concat(DATE_FORMAT(create_time, '%Y-%m-%d %H'),':00:00') as time, "
-                       "count(*) AS malwareNumber "
+                       "count(uuid) AS malwareNumber "
                        "from malware_base_info " + where_str + " group by DATE_FORMAT(create_time, '%Y-%m-%d %H')")
 
         desc = cursor.description
         all_data = cursor.fetchall()
         all_region_file_num = [dict(zip([col[0] for col in desc], row)) for row in all_data]
-
+        print(all_region_file_num)
         time_data_file_num = []
         for ar in all_region_file_num:
             # 将time_str 转为 num
@@ -1099,35 +1105,35 @@ def get_ecs_force_playing(request):
 # 第二个界面 态势等级视图
 # 态势等级视图 获取每个ECS的信息（包括ECS_ID、态势等级、聚类结果、半径、态势值、是否高危、是否高亮、文件信息）
 def get_ecs_force(request):
-    # params = json.loads(request.body)
-    # time_slice = params['slice']
-    # file_filter = params['fileFilter']
-    # file = params['file']
-    # score_argv = params['score']
+    params = json.loads(request.body)
+    time_slice = params['slice']
+    file_filter = params['fileFilter']
+    file = params['file']
+    score_argv = params['score']
 
-    score_argv = {
-        'alpha': 0.5,
-        'beta': 0.5,
-        'theta': 0.5,
-        'gamma': 0.5
-    }
-
-    time_slice = {
-        'beginTime': 0.01,
-        'endTime': 0.02,
-        'isPlay': False
-    }
-
-    file_filter = {
-        'malwareType': [],
-        'malwareSubtype': [],
-        'fileType': []
-    }
-
-    file = {
-        'categories': '',
-        'subtype': ''
-    }
+    # score_argv = {
+    #     'alpha': 0.5,
+    #     'beta': 0.5,
+    #     'theta': 0.5,
+    #     'gamma': 0.5
+    # }
+    #
+    # time_slice = {
+    #     'beginTime': 0.01,
+    #     'endTime': 0.02,
+    #     'isPlay': False
+    # }
+    #
+    # file_filter = {
+    #     'malwareType': [],
+    #     'malwareSubtype': [],
+    #     'fileType': []
+    # }
+    #
+    # file = {
+    #     'categories': '',
+    #     'subtype': ''
+    # }
 
     is_play = time_slice['isPlay']
 
@@ -1874,9 +1880,9 @@ def get_opcode_tree_map(request):
     params_file_md5 = params['file_md5']
     tree_type = params['tree_type']   # 分为all_point stain
 
-    # params_uuid = '254b63c47e95bfa0cf08ae573d1cfcc0'
-    # params_file_md5 = '8132f2faae72c2a497b7f45a5e5af8eb'
-    # tree_type = 'stain'
+    # params_uuid = 'ee1fee335005711d3009b10758e14301'
+    # params_file_md5 = 'd8b9d2db73001d7f6195313648db5994'
+    tree_type = 'all_point'
     opcode_csv = generate_opcode_csv(params_uuid, params_file_md5)
     opcode_tree = generate_opcode_tree(opcode_csv, tree_type)
 
