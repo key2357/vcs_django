@@ -22,6 +22,15 @@ import networkx as nx
 def test(request):
     # cursor = connection.cursor()
     # cursor.execute(
+    #     "select uuid, malware_md5 from malware_base_info where create_time > '2020-08-14 09:10:08' and create_time < '2020-08-27 23:38:27' and malware_type = '自变异木马'")
+    # desc = cursor.description
+    # all_data = cursor.fetchall()
+    # edge_info = [dict(zip([col[0] for col in desc], row)) for row in all_data]
+    # print(edge_info)
+    # print(edge_info)
+
+    # cursor = connection.cursor()
+    # cursor.execute(
     #     "select source_uuid, source_file_md5, target_uuid, target_file_md5 from similarity where source_create_time > '{0}' and source_create_time  < '{1}' and target_create_time > '{0}' and source_create_time < '{1}'".format(
     #         old_begin_time_stamp, old_end_time_stamp, old_begin_time_stamp, old_end_time_stamp))
     # desc = cursor.description
@@ -155,13 +164,13 @@ def get_time_line_chart(request):
 
     # 文件过滤为空的逻辑，以确定where_str
     # file_filter = {
-    #     'malwareType': ['网站后门', '恶意进程'],
-    #     'malwareSubtype': ['WEBSHELL', '木马程序'],
-    #     'fileType': ['WEBSHELL', 'BIN']
+    #     'malwareType': [],
+    #     'malwareSubtype': ['自变异木马'],
+    #     'fileType': []
     # }
     #
-    # line_type = 'malwareType'
-    # time_type = '7 days'
+    # line_type = 'malwareSubtype'
+    # time_type = 'all'
 
     has_filter = has_filter_func(file_filter)
 
@@ -195,12 +204,24 @@ def get_time_line_chart(request):
             'graphData': []
         })
 
+        # 添加开头
+        Data[0]['graphData'].append({
+            'time': '2017-11-28 00:00:00',
+            'val': 0
+        })
+
         for i in force_value:
             if i['time'] != '0000-00-00 00:00:00':
                 Data[0]['graphData'].append({
                     'time': i['time'],
                     'val': int(i['malwareNumber'])
                 })
+
+        # 添加结尾
+        Data[0]['graphData'].append({
+            'time': '2020-11-04 00:00:00',
+            'val': 0
+        })
 
     elif line_type == 'MalwareType':
         # 获取MalwareType文件数量
@@ -227,6 +248,13 @@ def get_time_line_chart(request):
                 'graphData': []
             })
 
+        # 添加开头
+        for i in range(len(malware_type)):
+            Data[i]['graphData'].append({
+                'time': '2017-11-28 00:00:00',
+                'val': 0
+            })
+
         for f in force_value:
             if f['time'] != '0000-00-00 00:00:00':
                 for i in range(len(malware_type)):
@@ -234,6 +262,13 @@ def get_time_line_chart(request):
                         'time': f['time'],
                         'val': int(f[malware_type[i]])
                     })
+
+        # 添加结尾
+        for i in range(len(malware_type)):
+            Data[i]['graphData'].append({
+                'time': '2020-11-04 00:00:00',
+                'val': 0
+            })
 
     else:
         cursor.execute("select concat(DATE_FORMAT(create_time, '%Y-%m-%d '),'00:00:00') as time, "
@@ -270,6 +305,13 @@ def get_time_line_chart(request):
                 'graphData': []
             })
 
+        # 添加开头
+        for i in range(len(malware_sub_type)):
+            Data[i]['graphData'].append({
+                'time': '2017-11-28 00:00:00',
+                'val': 0
+            })
+
         for f in force_value:
             if f['time'] != '0000-00-00 00:00:00':
                 for i in range(len(malware_sub_type)):
@@ -277,6 +319,14 @@ def get_time_line_chart(request):
                         'time': f['time'],
                         'val': int(f[malware_sub_type[i]])
                     })
+        # 添加结尾
+        for i in range(len(malware_sub_type)):
+            Data[i]['graphData'].append({
+                'time': '2020-11-04 00:00:00',
+                'val': 0
+            })
+
+    # Data排序
 
     return HttpResponse(json.dumps(Data), content_type='application/json')
 
@@ -568,20 +618,20 @@ def get_space_tree_map(request):
 # 第一个界面 时空概览
 # UI-v2 view1 时空概览之4个模式
 def get_overview(request):
-    # params = json.loads(request.body)
-    # time_slice = params['slice']
-    # file_filter = params['fileFilter']
+    params = json.loads(request.body)
+    time_slice = params['slice']
+    file_filter = params['fileFilter']
 
-    time_slice = {
-        'beginTime': 0.9110915492957746,
-        'endTime': 1
-    }
-
-    file_filter = {
-        'malwareType': [],
-        'malwareSubtype': ['自变异木马'],
-        'fileType': []
-    }
+    # time_slice = {
+    #     'beginTime': 0.9110915492957746,
+    #     'endTime': 1
+    # }
+    #
+    # file_filter = {
+    #     'malwareType': [],
+    #     'malwareSubtype': ['自变异木马'],
+    #     'fileType': []
+    # }
 
     has_filter = has_filter_func(file_filter)
 
@@ -668,16 +718,26 @@ def get_overview(request):
         desc = cursor.description
         all_data = cursor.fetchall()
         all_region_file_num = [dict(zip([col[0] for col in desc], row)) for row in all_data]
-        print(all_region_file_num)
         time_data_file_num = []
+
+        # 添加开头与结尾
+        # 分为10段
+        for ii in range(10):
+            time_data_file_num.append({
+                'time_num': 0.05 + ii * 0.1,
+                'file_num': 0
+            })
+
         for ar in all_region_file_num:
             # 将time_str 转为 num
             this_stamp = time.mktime(time.strptime(ar['time'], "%Y-%m-%d %H:%M:%S"))
             this_number = (this_stamp - begin_time_stamp) / stamp_length
-            time_data_file_num.append({
-                'time_num': this_number,
-                'file_num': ar['malwareNumber']
-            })
+            time_data_file_num[int(math.floor(this_number*10) % 10)]['file_num'] += ar['malwareNumber']
+
+            # time_data_file_num.append({
+            #     'time_num': this_number,
+            #     'file_num': ar['malwareNumber']
+            # })
 
         time_data_file_num = sorted(time_data_file_num, key=lambda value: value['time_num'])
 
@@ -1909,7 +1969,7 @@ def get_opcode_tree_map(request):
     params = json.loads(request.body)
     params_uuid = params['uuid']
     params_file_md5 = params['file_md5']
-    tree_type = params['stain']   # 分为all_point stain
+    tree_type = params['tree_type']   # 分为all_point stain
 
     # params_uuid = '177d4565891a3128d823f2f965aa0318'
     # params_file_md5 = 'b14ab3c740aae4d5bc0d2724ce89f786'
@@ -1922,13 +1982,13 @@ def get_opcode_tree_map(request):
 
 # 第三个界面 opcode的使用概览
 def get_opcode_overview(request):
-    # params = json.loads(request.body)
-    # time_slice = params['slice']
+    params = json.loads(request.body)
+    time_slice = params['slice']
 
-    time_slice = {
-        'beginTime': 0,
-        'endTime': 0.5
-    }
+    # time_slice = {
+    #     'beginTime': 0,
+    #     'endTime': 0.5
+    # }
 
     cursor = connection.cursor()
     cursor.execute("select ECS_ID, AS_ID, VPC_ID, Region_ID, pattern from user_netstate_info ")
